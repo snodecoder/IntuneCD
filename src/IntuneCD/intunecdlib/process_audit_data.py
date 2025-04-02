@@ -194,7 +194,9 @@ class ProcessAuditData(IntuneCDBase):
 
         return records
 
-    def process_audit_data(self, audit_data, compare_data, path, file):
+    def process_audit_data(
+        self, audit_data, compare_data, path, file, get_record=True, record=None
+    ):
         """
         Processes the audit data from Intune.
 
@@ -213,7 +215,8 @@ class ProcessAuditData(IntuneCDBase):
 
         # Commit the changes
         if git_repo:
-            record = self._get_payload_from_audit_data(audit_data, compare_data)
+            if get_record:
+                record = self._get_payload_from_audit_data(audit_data, compare_data)
             if not record:
                 self.log(
                     function="process_audit_data",
