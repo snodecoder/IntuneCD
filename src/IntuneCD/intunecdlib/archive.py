@@ -44,6 +44,14 @@ class Archive(BaseBackupModule):
         if self.audit_data:
             self._handle_audit_commit(file, dst, archive_path, src)
 
+    def delete_file(self, file, root):
+        src = os.path.join(root, file)
+        if os.path.exists(src):
+            os.remove(src)
+
+        if self.audit_data:
+            self._handle_audit_commit(file, src, src, src)
+
     def _get_audit_delete_events(self) -> list:
         """Gets all delete events from the audit log from the last 24h
 
@@ -135,9 +143,11 @@ class Archive(BaseBackupModule):
                 record=audit_data_record,
             )
 
-    def move_to_archive(self, created_files):
-        if not os.path.exists(os.path.join(self.path, "__archive__")):
-            os.makedirs(os.path.join(self.path, "__archive__"))
+    def move_to_archive(self, created_files, skip_archive=False):
+
+        if not skip_archive:
+            if not os.path.exists(os.path.join(self.path, "__archive__")):
+                os.makedirs(os.path.join(self.path, "__archive__"))
 
         for root, dirs, files in os.walk(self.path, topdown=True):
             dirs[:] = [d for d in dirs if d not in self.exclude]
@@ -146,7 +156,10 @@ class Archive(BaseBackupModule):
                     if root == self.path and file.endswith(".json"):
                         continue
                     if file.replace(f".{self.filetype}", "") not in created_files:
-                        self.archive_file(file, root)
+                        if not skip_archive:
+                            self.archive_file(file, root)
+                        if skip_archive:
+                            self.delete_file(file, root)
 
         mgmt_path = os.path.join(self.path, "Management Intents")
         if os.path.exists(mgmt_path):
@@ -154,4 +167,7 @@ class Archive(BaseBackupModule):
                 for file in files:
                     if file.endswith((".yaml", ".json")):
                         if file.replace(f".{self.filetype}", "") not in created_files:
-                            self.archive_file(file, root)
+                            if not skip_archive:
+                                self.archive_file(file, root)
+                            if skip_archive:
+                                self.delete_file(file, root)

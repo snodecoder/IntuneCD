@@ -305,16 +305,15 @@ def start(args=None):
             if output is not None
         ]
 
-        if not args.skip_archive:
-            archiver = Archive(
-                path=args.path,
-                filetype=args.output,
-                append_id=args.append_id,
-                audit=args.audit,
-                token=token,
-            )
+        archiver = Archive(
+            path=args.path,
+            filetype=args.output,
+            append_id=args.append_id,
+            audit=args.audit,
+            token=token,
+        )
 
-            archiver.move_to_archive(created_files)
+        archiver.move_to_archive(created_files, args.skip_archive)
 
         return config_count
 
