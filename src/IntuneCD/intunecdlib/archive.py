@@ -42,7 +42,7 @@ class Archive(BaseBackupModule):
         shutil.move(src, dst)
 
         if self.audit_data:
-            self._handle_audit_commit(file, dst, archive_path)
+            self._handle_audit_commit(file, dst, archive_path, src)
 
     def _get_audit_delete_events(self) -> list:
         """Gets all delete events from the audit log from the last 24h
@@ -50,7 +50,13 @@ class Archive(BaseBackupModule):
         Returns:
             list: A list of all delete events
         """
-        start_date = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        if not os.getenv("AUDIT_DAYS_BACK"):
+            days_back = 1
+        else:
+            days_back = int(os.getenv("AUDIT_DAYS_BACK"))
+        start_date = (
+            datetime.now(timezone.utc) - timedelta(days=days_back)
+        ).isoformat()
         end_date = datetime.now(timezone.utc).isoformat()
 
         q_params = {
@@ -69,7 +75,7 @@ class Archive(BaseBackupModule):
 
         return audit_data
 
-    def _handle_audit_commit(self, filename, filepath, archive_path):
+    def _handle_audit_commit(self, filename, filepath, archive_path, source_file):
         """Handles the audit commit for the file
 
         Args:
@@ -109,6 +115,17 @@ class Archive(BaseBackupModule):
             }
 
             self.filename = os.path.splitext(os.path.basename(filepath))[0]
+            # process audit and check for deleted files
+            self.process_audit_data.process_audit_data(
+                audit_data_record,
+                None,
+                archive_path,
+                filepath,
+                get_record=False,
+                record=audit_data_record,
+                source_file=source_file,
+            )
+            # process audit and check for archived files
             self.process_audit_data.process_audit_data(
                 audit_data_record,
                 None,
