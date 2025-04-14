@@ -30,10 +30,13 @@ def getAuth(mode, localauth, certauth, interactiveauth, scopes, entra, tenant):
         THUMBPRINT = os.environ.get("THUMBPRINT")
         TENANT_NAME = os.environ.get("TENANT_NAME")
         CLIENT_ID = os.environ.get("CLIENT_ID")
+        PASSPHRASE = os.environ.get("PASSPHRASE")
 
         if not all([KEY_FILE, THUMBPRINT, TENANT_NAME, CLIENT_ID]):
             raise ValueError("One or more os.environ variables not set")
-        return obtain_accesstoken_cert(TENANT_NAME, CLIENT_ID, THUMBPRINT, KEY_FILE)
+        return obtain_accesstoken_cert(
+            TENANT_NAME, CLIENT_ID, THUMBPRINT, KEY_FILE, PASSPHRASE
+        )
 
     if interactiveauth:
         TENANT_NAME = os.environ.get("TENANT_NAME")
