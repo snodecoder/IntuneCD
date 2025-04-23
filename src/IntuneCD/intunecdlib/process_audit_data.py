@@ -264,19 +264,20 @@ class ProcessAuditData(IntuneCDBase):
             self._configure_git(record, path)
             # check if file has been modified
             result = self._git_check_modified(path, file)
+            file_not_found = False
 
             if not result:
                 file_not_found = self._git_check_new_file(path, file)
-                if source_file:
-                    path = os.path.dirname(source_file)
-                    file_deleted = self._git_check_deleted_file(path, source_file)
-                else:
-                    file_deleted = self._git_check_deleted_file(path, file)
+                
+            if source_file:
+                path = os.path.dirname(source_file)
+                file_deleted = self._git_check_deleted_file(path, source_file)
+            else:
+                file_deleted = self._git_check_deleted_file(path, file)
 
             if result or file_not_found or file_deleted:
                 # commit the changes
                 if file_deleted and source_file:
-                    path = os.path.dirname(source_file)
                     self._git_commit_changes(record, path, source_file, deleted=True)
                 elif file_deleted:
                     self._git_commit_changes(record, path, file, deleted=True)
