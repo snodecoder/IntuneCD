@@ -160,11 +160,17 @@ class ProcessAuditData(IntuneCDBase):
         :param path: The path to the git repo.
         :param file: The file to commit.
         """
+
+        file_path = os.path.relpath(os.path.abspath(file), start=os.path.abspath(path))
+        self.log(
+            function="_git_commit_changes",
+            msg=f"Relative path for {file} is {file_path}.",
+        )
         # commit the changes
         if deleted:
-            cmd = ["git", "-C", path, "rm", f"{file}"]
+            cmd = ["git", "-C", path, "rm", f"{file_path}"]
         else:
-            cmd = ["git", "-C", path, "add", f"{file}"]
+            cmd = ["git", "-C", path, "add", f"{file_path}"]
         self.log(
             function="_git_commit_changes",
             msg=f"Running command {cmd} to add {file} to the git repo.",
@@ -268,7 +274,7 @@ class ProcessAuditData(IntuneCDBase):
 
             if not result:
                 file_not_found = self._git_check_new_file(path, file)
-                
+
             if source_file:
                 path = os.path.dirname(source_file)
                 file_deleted = self._git_check_deleted_file(path, source_file)
