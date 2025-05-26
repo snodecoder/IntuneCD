@@ -236,10 +236,10 @@ class BaseBackupModule(BaseGraphModule):
 
         if self.prefix:
             if name_key == "":
-                return self.results
+                return {"config_count": 0, "outputs": []}
             match = self.check_prefix_match(data[f"{name_key}"], self.prefix)
             if not match:
-                return self.results
+                return {"config_count": 0, "outputs": []}
 
         if log_message:
             self.log(msg=log_message + data[f"{name_key}"])
