@@ -76,52 +76,51 @@ def assignment_table(data):
     if "assignments" in data:
         assignments = data["assignments"]
         assignment_list = []
-        target = ""
-        intent = ""
         for assignment in assignments:
+            headers = ["intent", "target", "filter type", "filter name"]
+            target = ""
+            intent = ""
             if (
                 assignment["target"]["@odata.type"]
                 == "#microsoft.graph.allDevicesAssignmentTarget"
             ):
                 target = "All Devices"
+                intent = "Include"
             if (
                 assignment["target"]["@odata.type"]
                 == "#microsoft.graph.allLicensedUsersAssignmentTarget"
             ):
                 target = "All Users"
+                intent = "Include"
             if "groupName" in assignment["target"]:
                 target = assignment["target"]["groupName"]
-            if "intent" in assignment:
+            if "intent" in assignment and assignment["intent"] not in ["apply", ""]:
                 intent = assignment["intent"]
-                headers = ["intent", "target", "filter type", "filter name"]
             else:
-                headers = ["target", "filter type", "filter name"]
-            if intent:
-                assignment_list.append(
-                    [
-                        intent,
-                        target,
-                        assignment["target"][
-                            "deviceAndAppManagementAssignmentFilterType"
-                        ],
-                        assignment["target"][
-                            "deviceAndAppManagementAssignmentFilterId"
-                        ],
-                    ]
-                )
-            else:
-                assignment_list.append(
-                    [
-                        target,
-                        assignment["target"][
-                            "deviceAndAppManagementAssignmentFilterType"
-                        ],
-                        assignment["target"][
-                            "deviceAndAppManagementAssignmentFilterId"
-                        ],
-                    ]
-                )
+                if (
+                    assignment["target"]["@odata.type"]
+                    == "#microsoft.graph.groupAssignmentTarget"
+                ):
+                    intent = "Include"
+                if (
+                    assignment["target"]["@odata.type"]
+                    == "#microsoft.graph.exclusionGroupAssignmentTarget"
+                ):
+                    intent = "Exclude"
+            assignment_list.append(
+                [
+                    intent,
+                    target,
+                    assignment["target"][
+                        "deviceAndAppManagementAssignmentFilterType"
+                    ],
+                    assignment["target"][
+                        "deviceAndAppManagementAssignmentFilterId"
+                    ],
+                ]
+            )
 
+            assignment_list.sort(key=lambda x: x[0], reverse=True)  # Sort by the 'Intent' column in reverse order
             table = write_assignment_table(assignment_list, headers)
 
     return table
