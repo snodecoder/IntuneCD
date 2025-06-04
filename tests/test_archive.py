@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from testfixtures import TempDirectory
 
-from src.IntuneCD.intunecdlib.archive import move_to_archive
+from src.IntuneCD.intunecdlib.archive import Archive
 
 
 class TestMoveToArchive(unittest.TestCase):
@@ -54,27 +54,26 @@ class TestMoveToArchive(unittest.TestCase):
     def test_folder_exists(self):
         """The archive folder should be created."""
 
-        move_to_archive(self.directory.path, self.createdFile, "json")
+        Archive(path=self.directory.path, filetype="json").move_to_archive(
+            self.createdFile
+        )
 
-        self.assertEqual(os.path.exists(self.archive_folder), True)
+        archive_path = os.path.join(self.directory.path, "__archive__")
+        self.assertTrue(os.path.exists(archive_path))
 
     def test_file_moved(self):
         """The files should be moved to the archive folder."""
 
         self.createdFile = []
 
-        move_to_archive(self.directory.path, self.createdFile, "json")
+        archive = Archive(path=self.directory.path, filetype="json")
+        archive.move_to_archive(self.createdFile)
+        archive_path = os.path.join(
+            self.directory.path, "__archive__", archive.date_tag
+        )
 
-        self.assertEqual(
-            os.path.exists(self.archive_folder + "/" + self.datetime + "/test.json"),
-            True,
-        )
-        self.assertEqual(
-            os.path.exists(
-                self.archive_folder + "/" + self.datetime + "/test_intent.json"
-            ),
-            True,
-        )
+        self.assertTrue(os.path.exists(os.path.join(archive_path, "test.json")))
+        self.assertTrue(os.path.exists(os.path.join(archive_path, "test_intent.json")))
 
 
 if __name__ == "__main__":

@@ -30,10 +30,23 @@ class AssignmentReport(BaseBackupModule):
                 return
 
         for assignment in data["assignments"]:
+            intent = ""
             if not assignment["target"].get("groupName"):
                 continue
 
-            intent_string = assignment.get("intent", "")
+            if "intent" in assignment and assignment["intent"] not in ["apply", ""]:
+                intent = assignment["intent"]
+            else:
+                if (
+                    assignment["target"]["@odata.type"]
+                    == "#microsoft.graph.groupAssignmentTarget"
+                ):
+                    intent = "Include"
+                if (
+                    assignment["target"]["@odata.type"]
+                    == "#microsoft.graph.exclusionGroupAssignmentTarget"
+                ):
+                    intent = "Exclude"
             config_type = ""
             if data.get("@odata.type"):
                 config_type = f'{data["@odata.type"].split(".")[2]}'
@@ -41,7 +54,7 @@ class AssignmentReport(BaseBackupModule):
             payload_data = {
                 "name": payload_name,
                 "type": config_type,
-                "intent": intent_string,
+                "intent": intent,
             }
 
             group_data = {

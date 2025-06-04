@@ -56,7 +56,7 @@ def obtain_accesstoken_app(TENANT_NAME, CLIENT_ID, CLIENT_SECRET):
     return token
 
 
-def obtain_accesstoken_cert(TENANT_NAME, CLIENT_ID, THUMBPRINT, KEY_FILE):
+def obtain_accesstoken_cert(TENANT_NAME, CLIENT_ID, THUMBPRINT, KEY_FILE, PASSPHRASE):
     """
     This function is used to get an access token to MS Graph using a certificate.
 
@@ -73,6 +73,7 @@ def obtain_accesstoken_cert(TENANT_NAME, CLIENT_ID, THUMBPRINT, KEY_FILE):
         client_credential={
             "thumbprint": THUMBPRINT,
             "private_key": open(KEY_FILE, encoding="utf-8").read(),
+            "passphrase": PASSPHRASE,
         },
         authority=AUTHORITY + TENANT_NAME,
     )

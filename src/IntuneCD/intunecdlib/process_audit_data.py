@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import subprocess
+import os
 
 from .IntuneCDBase import IntuneCDBase
 
@@ -128,7 +129,30 @@ class ProcessAuditData(IntuneCDBase):
 
         return False
 
-    def _git_commit_changes(self, audit_record, path, file):
+    def _git_check_deleted_file(self, path, file):
+        """Checks if the file is deleted.
+
+        Args:
+            path: The path to the git repo.
+            file: The file to check.
+        """
+
+        # check if it is a deleted file
+        cmd = ["git", "-C", path, "ls-files", "--deleted", f"{file}"]
+        self.log(
+            function="_git_check_deleted_file",
+            msg=f"Running command {cmd} to check if {file} is a deleted file.",
+        )
+        deleted_file_result = subprocess.run(
+            cmd, capture_output=True, text=True, check=False
+        )
+        # check if "deleted" is in the stdout
+        if deleted_file_result.stdout:
+            return True
+
+        return False
+
+    def _git_commit_changes(self, audit_record, path, file, deleted=False):
         """
         Commits the changes to the git repo.
 
@@ -136,8 +160,17 @@ class ProcessAuditData(IntuneCDBase):
         :param path: The path to the git repo.
         :param file: The file to commit.
         """
+
+        file_path = os.path.relpath(os.path.abspath(file), start=os.path.abspath(path))
+        self.log(
+            function="_git_commit_changes",
+            msg=f"Relative path for {file} is {file_path}.",
+        )
         # commit the changes
-        cmd = ["git", "-C", path, "add", f"{file}"]
+        if deleted:
+            cmd = ["git", "-C", path, "rm", f"{file_path}"]
+        else:
+            cmd = ["git", "-C", path, "add", f"{file_path}"]
         self.log(
             function="_git_commit_changes",
             msg=f"Running command {cmd} to add {file} to the git repo.",
@@ -194,7 +227,16 @@ class ProcessAuditData(IntuneCDBase):
 
         return records
 
-    def process_audit_data(self, audit_data, compare_data, path, file):
+    def process_audit_data(
+        self,
+        audit_data,
+        compare_data,
+        path,
+        file,
+        get_record=True,
+        record=None,
+        source_file=None,
+    ):
         """
         Processes the audit data from Intune.
 
@@ -213,7 +255,8 @@ class ProcessAuditData(IntuneCDBase):
 
         # Commit the changes
         if git_repo:
-            record = self._get_payload_from_audit_data(audit_data, compare_data)
+            if get_record:
+                record = self._get_payload_from_audit_data(audit_data, compare_data)
             if not record:
                 self.log(
                     function="process_audit_data",
@@ -227,13 +270,25 @@ class ProcessAuditData(IntuneCDBase):
             self._configure_git(record, path)
             # check if file has been modified
             result = self._git_check_modified(path, file)
+            file_not_found = False
 
             if not result:
                 file_not_found = self._git_check_new_file(path, file)
 
-            if result or file_not_found:
+            if source_file:
+                path = os.path.dirname(source_file)
+                file_deleted = self._git_check_deleted_file(path, source_file)
+            else:
+                file_deleted = self._git_check_deleted_file(path, file)
+
+            if result or file_not_found or file_deleted:
                 # commit the changes
-                self._git_commit_changes(record, path, file)
+                if file_deleted and source_file:
+                    self._git_commit_changes(record, path, source_file, deleted=True)
+                elif file_deleted:
+                    self._git_commit_changes(record, path, file, deleted=True)
+                else:
+                    self._git_commit_changes(record, path, file)
             else:
                 self.log(
                     function="process_audit_data",

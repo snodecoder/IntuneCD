@@ -7,66 +7,151 @@ This module moves files to archive during backup if they have been removed from 
 
 import os
 import shutil
-from datetime import datetime
 
-# Folders to exclude from archving
-exclude = set(
-    [
-        "Management Intents",
-        "archive",
-        "__archive__",
-        "Assignment Report",
-        "Autopilot Devices",
-    ]
-)
-# Date tag for archive folder
-date_tag = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+from datetime import datetime, timedelta, timezone
+from .BaseBackupModule import BaseBackupModule
+from .process_audit_data import ProcessAuditData
 
 
-def archive(path, file, root) -> None:
-    """Moves a file to the archive folder.
+class Archive(BaseBackupModule):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.exclude = {
+            "Management Intents",
+            "archive",
+            "__archive__",
+            "Assignment Report",
+            "Autopilot Devices",
+            "Activation Lock Bypass Codes",
+        }
+        self.date_tag = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        self.process_audit_data = ProcessAuditData()
+        self.audit_endpoint = (
+            "https://graph.microsoft.com/beta/deviceManagement/auditEvents"
+        )
+        if self.append_id and self.audit:
+            self.audit_data = self._get_audit_delete_events()
 
-    Args:
-        path (_str_): path to current folder
-        file (_str_): file to archive
-        root (_str_): root of the file
-    """
-    if not os.path.exists(f"{path}/__archive__/{date_tag}"):
-        os.makedirs(f"{path}/__archive__/{date_tag}")
-    shutil.move(
-        os.path.join(root, file),
-        os.path.join(path, f"__archive__/{date_tag}", file),
-    )
+    def archive_file(self, file, root):
+        archive_path = os.path.join(self.path, "__archive__", self.date_tag)
+        if not os.path.exists(archive_path):
+            os.makedirs(archive_path)
 
+        src = os.path.join(root, file)
+        dst = os.path.join(archive_path, file)
+        shutil.move(src, dst)
 
-def move_to_archive(path, created_files, output) -> None:
-    """Moves a file to the archive folder.
+        if self.audit_data:
+            self._handle_audit_commit(file, dst, archive_path, src)
 
-    Args:
-        path (_str_): path to current folder
-        created_files (_list_): list of created files during backup
-        output (_str_): format the file is in
-    """
-    if not os.path.exists(f"{path}/__archive__"):
-        os.makedirs(f"{path}/__archive__/")
+    def _get_audit_delete_events(self) -> list:
+        """Gets all delete events from the audit log from the last 24h
 
-    for root, dirs, files in os.walk(path, topdown=True):
-        # Remove excluded folders from dirs
-        dirs[:] = [d for d in dirs if d not in exclude]
-        for file in files:
-            # if json is in root, skip it and move on
-            if file.endswith(".json") and root == path:
-                continue
-            if file.endswith(".yaml") or file.endswith(".json"):
-                # if file is not in created_files, archive it
-                if file.replace(f".{output}", "") not in created_files:
-                    archive(path, file, root)
+        Returns:
+            list: A list of all delete events
+        """
+        if not os.getenv("AUDIT_DAYS_BACK"):
+            days_back = 1
+        else:
+            days_back = int(os.getenv("AUDIT_DAYS_BACK"))
+        start_date = (
+            datetime.now(timezone.utc) - timedelta(days=days_back)
+        ).isoformat()
+        end_date = datetime.now(timezone.utc).isoformat()
 
-    # Check if Management Intents folder exists
-    if os.path.exists(f"{path}/Management Intents") is True:
-        for root, dirs, files in os.walk(f"{path}/Management Intents", topdown=True):
+        q_params = {
+            "$filter": (
+                f"activityOperationType eq 'Delete' and "
+                f"activityDateTime gt {start_date} and "
+                f"activityDateTime le {end_date}"
+            ),
+            "$select": "actor,activityDateTime,activityType,activityOperationType,activityResult,resources",
+            "$orderby": "activityDateTime desc",
+        }
+
+        audit_data = self.make_graph_request(
+            self.audit_endpoint, params=q_params, method="GET"
+        )
+
+        return audit_data
+
+    def _handle_audit_commit(self, filename, filepath, archive_path, source_file):
+        """Handles the audit commit for the file
+
+        Args:
+            filename: The name of the file
+            filepath: The path to the file
+            archive_path: The path to the archive
+        """
+        resource_id = filename.split("__")[-1].replace(".json", "").replace(".yaml", "")
+
+        if self.audit_data:
+            audit_data_record = next(
+                (
+                    item
+                    for item in self.audit_data.get("value", [])
+                    if resource_id
+                    in [res.get("resourceId") for res in item.get("resources", [])]
+                ),
+                None,
+            )
+
+        if audit_data_record:
+            if audit_data_record["actor"]["auditActorType"] == "ItPro":
+                actor = audit_data_record["actor"].get("userPrincipalName")
+            else:
+                actor = audit_data_record["actor"].get("applicationDisplayName")
+
+            audit_data_record = {
+                "resourceId": audit_data_record["resources"][0]["resourceId"],
+                "auditResourceType": audit_data_record["resources"][0][
+                    "auditResourceType"
+                ],
+                "actor": actor,
+                "activityDateTime": audit_data_record["activityDateTime"],
+                "activityType": audit_data_record["activityType"],
+                "activityOperationType": audit_data_record["activityOperationType"],
+                "activityResult": audit_data_record["activityResult"],
+            }
+
+            self.filename = os.path.splitext(os.path.basename(filepath))[0]
+            # process audit and check for deleted files
+            self.process_audit_data.process_audit_data(
+                audit_data_record,
+                None,
+                archive_path,
+                filepath,
+                get_record=False,
+                record=audit_data_record,
+                source_file=source_file,
+            )
+            # process audit and check for archived files
+            self.process_audit_data.process_audit_data(
+                audit_data_record,
+                None,
+                archive_path,
+                filepath,
+                get_record=False,
+                record=audit_data_record,
+            )
+
+    def move_to_archive(self, created_files):
+        if not os.path.exists(os.path.join(self.path, "__archive__")):
+            os.makedirs(os.path.join(self.path, "__archive__"))
+
+        for root, dirs, files in os.walk(self.path, topdown=True):
+            dirs[:] = [d for d in dirs if d not in self.exclude]
             for file in files:
-                if file.endswith(".yaml") or file.endswith(".json"):
-                    # if file is not in created_files, archive it
-                    if file.replace(f".{output}", "") not in created_files:
-                        archive(path, file, root)
+                if file.endswith((".yaml", ".json")):
+                    if root == self.path and file.endswith(".json"):
+                        continue
+                    if file.replace(f".{self.filetype}", "") not in created_files:
+                        self.archive_file(file, root)
+
+        mgmt_path = os.path.join(self.path, "Management Intents")
+        if os.path.exists(mgmt_path):
+            for root, dirs, files in os.walk(mgmt_path, topdown=True):
+                for file in files:
+                    if file.endswith((".yaml", ".json")):
+                        if file.replace(f".{self.filetype}", "") not in created_files:
+                            self.archive_file(file, root)

@@ -10,7 +10,7 @@ from io import StringIO
 
 from .backup_entra import backup_entra
 from .backup_intune import backup_intune
-from .intunecdlib.archive import move_to_archive
+from .intunecdlib.archive import Archive
 from .intunecdlib.get_accesstoken import obtain_azure_token
 from .intunecdlib.get_authparams import getAuth
 
@@ -102,7 +102,7 @@ def get_parser(include_help=True):
             "CustomAttributes",
             "DeviceCategories",
             "windowsDriverUpdates",
-            "windowsFeatuteUpdates",
+            "windowsFeatureUpdates",
             "windowsQualityUpdates",
             "Roles",
             "ScopeTags",
@@ -112,6 +112,7 @@ def get_parser(include_help=True):
             "DeviceCompliancePolicies",
             "ComplianceScripts",
             "ReusablePolicySettings",
+            "SettingsCatalog",
             "entraApplications",
             "entraAuthenticationFlowsPolicy",
             "entraAuthenticationMethods",
@@ -306,7 +307,15 @@ def start(args=None):
         ]
 
         if not args.skip_archive:
-            move_to_archive(path, created_files, output)
+            archiver = Archive(
+                path=args.path,
+                filetype=args.output,
+                append_id=args.append_id,
+                audit=args.audit,
+                token=token,
+            )
+
+            archiver.move_to_archive(created_files)
 
         return config_count
 
