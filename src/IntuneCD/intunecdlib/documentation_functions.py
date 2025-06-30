@@ -662,6 +662,8 @@ def document_settings_catalog(
             platform = repo_data.get("platforms", "")
             technologies = repo_data.get("technologies", "")
             scope_tags = repo_data.get("roleScopeTagIds", [])
+            created_date = repo_data.get("createdDateTime", "")
+            modified_date = repo_data.get("lastModifiedDateTime", "")
             
             # Create basic policy info table
             basics_table_data = [
@@ -672,6 +674,13 @@ def document_settings_catalog(
                 ["Technologies", technologies],
                 ["Scope tags", ", ".join(scope_tags) if scope_tags else "Default"]
             ]
+            
+            # Add dates if available
+            if created_date:
+                basics_table_data.append(["Created", _format_date(created_date)])
+            if modified_date:
+                basics_table_data.append(["Last modified", _format_date(modified_date)])
+            
             # Remove None entries
             basics_table_data = [item for item in basics_table_data if item is not None]
             
@@ -705,21 +714,21 @@ def document_settings_catalog(
 
             # Write to file
             with open(target_md, "a", encoding="utf-8") as md:
-                md.write(top_header + "\n")
+                md.write(top_header + "\n\n")
                 
                 if assignments_table:
                     md.write("#### Assignments\n")
-                    md.write(str(assignments_table) + "\n")
+                    md.write(str(assignments_table) + "\n\n")
                 
                 md.write("#### Basics\n")
-                md.write(str(basics_table) + "\n")
+                md.write(str(basics_table) + "\n\n")
                 
                 # Write single configuration table
                 if settings_tables:
                     # There should only be one table now
                     for category_name, table in settings_tables:
                         md.write(f"#### {category_name}\n")
-                        md.write(str(table) + "\n")
+                        md.write(str(table) + "\n\n")
 
         except Exception as e:
             print(f"[DEBUG] Error processing Settings Catalog {filename}: {type(e).__name__}: {e}")
@@ -734,6 +743,17 @@ def _format_platform(platform):
         "android": "Android"
     }
     return platform_map.get(platform, platform)
+
+
+def _format_date(date_string):
+    """Format ISO date string to readable format."""
+    try:
+        from datetime import datetime
+        # Parse ISO format and convert to readable format
+        dt = datetime.fromisoformat(date_string.replace('Z', '+00:00'))
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return date_string
 
 
 def _create_settings_tables(settings):
@@ -774,16 +794,57 @@ def _create_settings_tables(settings):
             # If there are multiple child values, create separate rows
             for i, child_value in enumerate(value):
                 child_name = f"{display_name} ({i+1})" if len(value) > 1 else display_name
-                all_settings.append([child_name, str(child_value)])
+                formatted_value = _format_value_for_markdown(child_value)
+                all_settings.append([child_name, formatted_value, description if i == 0 else ""])
         else:
-            all_settings.append([display_name, str(value)])
+            formatted_value = _format_value_for_markdown(value)
+            all_settings.append([display_name, formatted_value, description])
     
-    # Create single table with all settings
+    # Create single table with all settings - add header row
     if all_settings:
-        table = write_table(all_settings)
+        # Add header row
+        table_data = [["Setting", "Value", "Description"]] + all_settings
+        table = write_table(table_data)
         return [("Configuration", table)]
     
     return []
+
+
+def _format_value_for_markdown(value):
+    """
+    Format setting value for markdown display, handling XML/JSON structures.
+    
+    :param value: The setting value to format
+    :return: Formatted value string
+    """
+    if not value or value == "Not configured":
+        return value
+    
+    value_str = str(value)
+    
+    # Check if this looks like XML content
+    if value_str.strip().startswith('<') and value_str.strip().endswith('>'):
+        # Format as XML code block
+        return f"```xml\n{value_str.strip()}\n```"
+    
+    # Check if this looks like JSON content
+    if (value_str.strip().startswith('{') and value_str.strip().endswith('}')) or \
+       (value_str.strip().startswith('[') and value_str.strip().endswith(']')):
+        try:
+            import json
+            # Try to parse and pretty-format JSON
+            parsed = json.loads(value_str)
+            formatted_json = json.dumps(parsed, indent=2)
+            return f"```json\n{formatted_json}\n```"
+        except Exception:
+            # If parsing fails, treat as regular text
+            pass
+    
+    # For very long values (> 100 chars), use code block
+    if len(value_str) > 100:
+        return f"```\n{value_str}\n```"
+    
+    return value_str
 
 
 def _extract_category_from_id(setting_definition_id):
@@ -872,7 +933,8 @@ def _extract_setting_value(setting_instance):
     :return: Formatted setting value or list of child values
     """
     if "simpleSettingValue" in setting_instance:
-        return setting_instance["simpleSettingValue"].get("value", "")
+        value = setting_instance["simpleSettingValue"].get("value", "")
+        return value if value != "" else "Not configured"
     elif "choiceSettingValue" in setting_instance:
         choice_value_obj = setting_instance["choiceSettingValue"]
         
@@ -881,7 +943,7 @@ def _extract_setting_value(setting_instance):
             child_values = []
             for child in choice_value_obj["children"]:
                 child_value = _extract_setting_value(child)
-                if child_value and child_value != "Not configured":
+                if child_value and child_value != "Not configured" and child_value != "":
                     child_values.append(child_value)
             
             # If we found child values, return them; otherwise fall back to choice value
@@ -890,15 +952,20 @@ def _extract_setting_value(setting_instance):
         
         # Fallback to choice value
         choice_value = choice_value_obj.get("value", "")
-        # Try to extract meaningful part from choice value
-        if "_" in choice_value:
-            parts = choice_value.split("_")
-            if len(parts) > 1:
-                return parts[-1].title()
-        return choice_value
+        if choice_value:
+            # Try to extract meaningful part from choice value
+            if "_" in choice_value:
+                parts = choice_value.split("_")
+                if len(parts) > 1:
+                    meaningful_part = parts[-1]
+                    # Return the meaningful part, but only if it's not just "selected"
+                    if meaningful_part.lower() not in ["selected", "enabled", "disabled"]:
+                        return meaningful_part.title()
+            return choice_value
+        return "Not configured"
     elif "groupSettingCollectionValue" in setting_instance:
         collection = setting_instance["groupSettingCollectionValue"]
-        if isinstance(collection, list):
+        if isinstance(collection, list) and len(collection) > 0:
             return f"{len(collection)} items"
         return "Collection value"
     
