@@ -14,7 +14,23 @@ import platform
 import re
 
 import yaml
-from pytablewriter import MarkdownTableWriter
+
+
+def html_table(headers, rows):
+    """
+    Generate an HTML table from headers and rows.
+    :param headers: List of column headers
+    :param rows: List of row lists
+    :return: HTML table as a string
+    """
+    table = "<table>\n<thead><tr>"
+    for h in headers:
+        table += f"<th>{h}</th>"
+    table += "</tr></thead>\n<tbody>\n"
+    for row in rows:
+        table += "<tr>" + "".join(f"<td>{cell}</td>" for cell in row) + "</tr>\n"
+    table += "</tbody>\n</table>"
+    return table
 
 
 def md_file(outpath):
@@ -31,18 +47,12 @@ def md_file(outpath):
 
 def write_table(data):
     """
-    This function creates the markdown table.
+    This function creates the HTML table.
 
     :param data: The data to be written to the table
-    :return: The Markdown table writer
+    :return: The HTML table as a string
     """
-
-    writer = MarkdownTableWriter(
-        headers=["setting", "value"],
-        value_matrix=data,
-    )
-
-    return writer
+    return html_table(["setting", "value"], data)
 
 
 def escape_markdown(text):
@@ -61,16 +71,14 @@ def escape_markdown(text):
 
 def assignment_table(data):
     """
-    This function creates the Markdown assignments table.
+    This function creates the HTML assignments table.
 
     :param data: The data to be written to the table
-    :return: The Markdown table writer
+    :return: The HTML table as a string
     """
 
     def write_assignment_table(data, headers):
-        writer = MarkdownTableWriter(headers=headers, value_matrix=data)
-
-        return writer
+        return html_table(headers, data)
 
     table = ""
     if "assignments" in data:
@@ -910,31 +918,14 @@ def _create_settings_tables(settings):
 
 def _write_clean_table(headers, data):
     """
-    Create a clean, compact markdown table without excessive formatting.
-    
+    Create a clean, compact HTML table.
     :param headers: List of column headers
     :param data: List of rows, each row is a list of values
-    :return: Clean markdown table string
+    :return: Clean HTML table string
     """
     if not data:
         return ""
-    
-    # Create header row
-    header_row = "| " + " | ".join(headers) + " |"
-    
-    # Create separator row with simple dashes
-    separator_row = "| " + " | ".join(["---"] * len(headers)) + " |"
-    
-    # Create data rows
-    data_rows = []
-    for row in data:
-        # Ensure row has same number of columns as headers
-        padded_row = row + [""] * (len(headers) - len(row))
-        data_rows.append("| " + " | ".join(str(cell) for cell in padded_row) + " |")
-    
-    # Combine all parts
-    table_lines = [header_row, separator_row] + data_rows
-    return "\n".join(table_lines)
+    return html_table(headers, data)
 
 
 def _format_value_for_markdown(value):
