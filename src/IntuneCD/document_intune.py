@@ -66,7 +66,7 @@ def document_intune(
         ("Scripts/Shell", "Shell Scripts"),
         ("Custom Attributes", "Custom Attributes"),
         ("Scripts/Powershell", "Powershell Scripts"),
-        # Note: Settings Catalog is now handled separately like Management Intents
+        ("Settings Catalog", "Settings Catalog"),
         ("Driver Updates", "Windows Driver Updates"),
         ("Feature Updates", "Windows Feature Updates"),
         ("Quality Updates", "Windows Quality Updates"),
@@ -115,11 +115,7 @@ def document_intune(
                 split_per_config,
             )
 
-    # **Run Management Intents and Settings Catalog Sequentially**
-    # These require special handling for settings documentation
+    # **Run Management Intents Sequentially**
     document_management_intents(
         f"{configpath}/Management Intents/", outpath, "Management Intents", split
-    )
-    document_management_intents(
-        f"{configpath}/Settings Catalog/", outpath, "Settings Catalog", split
     )
