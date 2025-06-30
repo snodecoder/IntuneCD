@@ -63,7 +63,10 @@ class SettingsCatalogBackupModule(BaseBackupModule):
         for item in self.graph_data["value"]:
             settings = self.get_object_details(item["id"], policy_responses)
             if settings:
-                item["settings"] = settings
+                # Enhance settings with display names from setting definitions
+                # This improves documentation by providing human-readable setting names
+                enriched_settings = self._enrich_settings_with_definitions(settings)
+                item["settings"] = enriched_settings
 
             self.preset_filename = (
                 f"{item['name']}_{str(item['technologies']).rsplit(',', 1)[-1]}"
@@ -89,3 +92,82 @@ class SettingsCatalogBackupModule(BaseBackupModule):
                 return None
 
         return self.results
+
+    def _enrich_settings_with_definitions(self, settings: list) -> list:
+        """
+        Enrich settings with display names and descriptions from setting definitions.
+        This method retrieves additional metadata from Microsoft Graph API to make 
+        Settings Catalog documentation more readable and user-friendly.
+        
+        :param settings: List of settings from the policy
+        :return: List of enriched settings with displayName and description
+        """
+        if not settings:
+            return settings
+            
+        # Collect unique setting definition IDs to batch request definitions
+        definition_ids = set()
+        for setting in settings:
+            if "settingDefinitions" in setting:
+                for definition in setting["settingDefinitions"]:
+                    if "id" in definition:
+                        definition_ids.add(definition["id"])
+        
+        if not definition_ids:
+            return settings
+            
+        # Get setting definitions to retrieve display names and descriptions
+        try:
+            # Convert set to list for batch request
+            definition_ids_list = list(definition_ids)
+            definition_responses = []
+            
+            # Make requests for setting definitions in batches
+            for i in range(0, len(definition_ids_list), 20):  # Process in chunks of 20
+                batch_ids = definition_ids_list[i:i+20]
+                for def_id in batch_ids:
+                    try:
+                        definition_response = self.make_graph_request(
+                            endpoint=f"{self.endpoint}/beta/deviceManagement/configurationSettings/{def_id}"
+                        )
+                        definition_responses.append(definition_response)
+                    except Exception as e:
+                        self.log(
+                            tag="warning", 
+                            msg=f"Could not retrieve definition for {def_id}: {e}"
+                        )
+                        continue
+            
+            # Create mapping of definition ID to display name and description
+            definition_map = {}
+            for definition in definition_responses:
+                if "id" in definition:
+                    definition_map[definition["id"]] = {
+                        "displayName": definition.get("displayName", ""),
+                        "description": definition.get("description", "")
+                    }
+            
+            # Enrich settings with display names and descriptions
+            enriched_settings = []
+            for setting in settings:
+                enriched_setting = setting.copy()
+                if "settingDefinitions" in setting:
+                    enriched_definitions = []
+                    for definition in setting["settingDefinitions"]:
+                        if "id" in definition and definition["id"] in definition_map:
+                            enriched_definition = definition.copy()
+                            enriched_definition.update(definition_map[definition["id"]])
+                            enriched_definitions.append(enriched_definition)
+                        else:
+                            enriched_definitions.append(definition)
+                    enriched_setting["settingDefinitions"] = enriched_definitions
+                enriched_settings.append(enriched_setting)
+                
+            return enriched_settings
+            
+        except Exception as e:
+            self.log(
+                tag="warning", 
+                msg=f"Error enriching settings with definitions: {e}"
+            )
+            return settings

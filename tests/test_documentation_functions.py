@@ -14,6 +14,7 @@ from src.IntuneCD.intunecdlib.documentation_functions import (
     md_file,
     remove_characters,
     write_table,
+    _process_settings_catalog_settings,
 )
 
 
@@ -174,3 +175,83 @@ class TestDocumentationFunctions(unittest.TestCase):
         self.expected_list = ["./config/test_file_name.md"]
 
         self.assertEqual(get_md_files(self.directory.path), self.expected_list)
+
+    def test_process_settings_catalog_settings(self):
+        """Test Settings Catalog settings processing for readable documentation."""
+        # Mock Settings Catalog data structure
+        settings_data = [
+            {
+                "settingDefinitions": [
+                    {
+                        "id": "device_vendor_msft_policy_config_defender_allowfullscanremovabledrive",
+                        "displayName": "Allow Full Scan Removable Drive", 
+                        "description": "Allow or disallow full scan of removable drives"
+                    }
+                ],
+                "settingInstance": {
+                    "@odata.type": "#microsoft.graph.deviceManagementConfigurationSimpleSettingInstance",
+                    "simpleSettingValue": {
+                        "@odata.type": "#microsoft.graph.deviceManagementConfigurationStringSettingValue",
+                        "value": "allowed"
+                    }
+                }
+            },
+            {
+                "settingDefinitions": [
+                    {
+                        "id": "device_vendor_msft_policy_config_defender_realTimeProtection",
+                        "displayName": "Real-time Protection",
+                        "description": "Enable real-time protection"
+                    }
+                ],
+                "settingInstance": {
+                    "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingInstance", 
+                    "choiceSettingValue": {
+                        "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingValue",
+                        "value": "device_vendor_msft_policy_config_defender_realTimeProtection_1"
+                    }
+                }
+            }
+        ]
+        
+        result = _process_settings_catalog_settings(settings_data)
+        
+        # Verify the function returns readable setting names and values
+        self.assertEqual(len(result), 2)
+        
+        # First setting should use display name
+        self.assertEqual(result[0][0], "Allow Full Scan Removable Drive<br /><em>Allow or disallow full scan of removable drives</em>")
+        self.assertEqual(result[0][1], "allowed")
+        
+        # Second setting should use display name  
+        self.assertEqual(result[1][0], "Real-time Protection<br /><em>Enable real-time protection</em>")
+        self.assertEqual(result[1][1], "device_vendor_msft_policy_config_defender_realTimeProtection_1")
+
+    def test_process_settings_catalog_settings_empty(self):
+        """Test Settings Catalog settings processing with empty data."""
+        result = _process_settings_catalog_settings([])
+        self.assertEqual(result, [])
+
+    def test_process_settings_catalog_settings_fallback(self):
+        """Test Settings Catalog settings processing falls back to ID manipulation when no displayName."""
+        settings_data = [
+            {
+                "settingDefinitions": [
+                    {
+                        "id": "device_vendor_msft_policy_config_defender_allowFullScan"
+                    }
+                ],
+                "settingInstance": {
+                    "simpleSettingValue": {
+                        "value": "enabled"
+                    }
+                }
+            }
+        ]
+        
+        result = _process_settings_catalog_settings(settings_data)
+        
+        # Should fall back to processing the ID
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0][0], "Allow Full Scan")  # Converted from allowFullScan
+        self.assertEqual(result[0][1], "enabled")

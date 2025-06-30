@@ -415,6 +415,95 @@ def document_configs(
             print(f"[DEBUG] Error processing {filename}: {type(e).__name__}: {e}")
 
 
+def _process_settings_catalog_settings(settings_list: list) -> list:
+    """
+    Process Settings Catalog settings to extract readable setting names and values.
+    This function handles the Settings Catalog specific data structure which differs
+    from Management Intents, providing human-readable setting names and formatted values.
+    
+    :param settings_list: List of settings from Settings Catalog policy
+    :return: List of [setting_name, value] pairs for documentation table
+    """
+    settings_table_data = []
+    
+    if not settings_list:
+        return settings_table_data
+    
+    for setting in settings_list:
+        # Extract setting definition information
+        if "settingDefinitions" in setting:
+            for definition in setting["settingDefinitions"]:
+                # Use displayName if available from enriched data, otherwise fall back to ID manipulation
+                if "displayName" in definition and definition["displayName"]:
+                    setting_name = definition["displayName"]
+                else:
+                    # Fall back to processing the ID like Management Intents
+                    setting_id = definition.get("id", "")
+                    if "_" in setting_id:
+                        setting_name = setting_id.split("_")[-1]  # Take last part after underscore
+                    else:
+                        setting_name = setting_id
+                    
+                    # Convert camelCase/PascalCase to readable format
+                    if setting_name:
+                        setting_name = setting_name[0].upper() + setting_name[1:] if setting_name else ""
+                        setting_name = re.findall("[A-Z][^A-Z]*", setting_name)
+                        setting_name = " ".join(setting_name)
+                
+                # Extract setting value
+                setting_value = ""
+                if "settingInstance" in setting:
+                    setting_instance = setting["settingInstance"]
+                    
+                    # Handle different setting value types
+                    if "simpleSettingValue" in setting_instance:
+                        simple_value = setting_instance["simpleSettingValue"]
+                        if "value" in simple_value:
+                            setting_value = str(simple_value["value"])
+                    elif "choiceSettingValue" in setting_instance:
+                        choice_value = setting_instance["choiceSettingValue"]
+                        if "value" in choice_value:
+                            setting_value = str(choice_value["value"])
+                        # Also show child settings if they exist
+                        if "children" in choice_value:
+                            child_values = []
+                            for child in choice_value["children"]:
+                                if "settingDefinitions" in child:
+                                    child_settings = _process_settings_catalog_settings([child])
+                                    child_values.extend([f"  {name}: {val}" for name, val in child_settings])
+                            if child_values:
+                                setting_value += "<br />Children:<br />" + "<br />".join(child_values)
+                    elif "groupSettingCollectionValue" in setting_instance:
+                        collection_value = setting_instance["groupSettingCollectionValue"]
+                        if "value" in collection_value:
+                            collection_items = []
+                            for item in collection_value["value"]:
+                                if "children" in item:
+                                    item_settings = _process_settings_catalog_settings(item["children"])
+                                    item_str = "<br />".join([f"  {name}: {val}" for name, val in item_settings])
+                                    collection_items.append(item_str)
+                            setting_value = "<br />".join(collection_items)
+                    
+                    # Format complex values for better readability
+                    if isinstance(setting_value, str) and len(setting_value.split(",")) > 1:
+                        vals = []
+                        for v in setting_value.split(","):
+                            v = v.strip()
+                            if ":" in v:
+                                v = f'**{v.replace(":", ":** ")}'
+                            vals.append(v)
+                        setting_value = "<br />".join(vals)
+                
+                # Add description if available from enriched data
+                description = definition.get("description", "")
+                if description:
+                    setting_name += f"<br /><em>{description}</em>"
+                
+                settings_table_data.append([setting_name, setting_value])
+    
+    return settings_table_data
+
+
 def document_management_intents(configpath, outpath, header, split):
     """
     This function documents the management intents.
@@ -458,28 +547,36 @@ def document_management_intents(configpath, outpath, header, split):
                 repo_data.pop("assignments", None)
 
                 intent_settings_list = []
-                for setting in repo_data["settingsDelta"]:
-                    setting_definition = setting["definitionId"].split("_")[1]
-                    setting_definition = (
-                        setting_definition[0].upper() + setting_definition[1:]
-                    )
-                    setting_definition = re.findall("[A-Z][^A-Z]*", setting_definition)
-                    setting_definition = " ".join(setting_definition)
+                
+                # Handle Management Intents with settingsDelta (existing logic)
+                if "settingsDelta" in repo_data:
+                    for setting in repo_data["settingsDelta"]:
+                        setting_definition = setting["definitionId"].split("_")[1]
+                        setting_definition = (
+                            setting_definition[0].upper() + setting_definition[1:]
+                        )
+                        setting_definition = re.findall("[A-Z][^A-Z]*", setting_definition)
+                        setting_definition = " ".join(setting_definition)
 
-                    vals = []
-                    value = str(remove_characters(setting["valueJson"]))
-                    comma = re.findall("[:][^:]*", value)
-                    for v in value.split(","):
-                        v = v.replace(" ", "")
-                        if comma:
-                            v = f'**{v.replace(":", ":** ")}'
-                        vals.append(v)
-                    value = ",".join(vals)
-                    value = value.replace(",", "<br />")
+                        vals = []
+                        value = str(remove_characters(setting["valueJson"]))
+                        comma = re.findall("[:][^:]*", value)
+                        for v in value.split(","):
+                            v = v.replace(" ", "")
+                            if comma:
+                                v = f'**{v.replace(":", ":** ")}'
+                            vals.append(v)
+                        value = ",".join(vals)
+                        value = value.replace(",", "<br />")
 
-                    intent_settings_list.append([setting_definition, value])
+                        intent_settings_list.append([setting_definition, value])
 
-                repo_data.pop("settingsDelta")
+                    repo_data.pop("settingsDelta")
+                
+                # Handle Settings Catalog with settings array (new logic for readable documentation)
+                elif "settings" in repo_data:
+                    intent_settings_list = _process_settings_catalog_settings(repo_data["settings"])
+                    repo_data.pop("settings")
 
                 description = ""
                 if "description" in repo_data:
