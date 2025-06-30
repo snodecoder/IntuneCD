@@ -714,10 +714,12 @@ def document_settings_catalog(
                 md.write("#### Basics\n")
                 md.write(str(basics_table) + "\n")
                 
-                # Write settings tables by category
-                for category_name, table in settings_tables:
-                    md.write(f"#### {category_name}\n")
-                    md.write(str(table) + "\n")
+                # Write single configuration table
+                if settings_tables:
+                    # There should only be one table now
+                    for category_name, table in settings_tables:
+                        md.write(f"#### {category_name}\n")
+                        md.write(str(table) + "\n")
 
         except Exception as e:
             print(f"[DEBUG] Error processing Settings Catalog {filename}: {type(e).__name__}: {e}")
@@ -736,16 +738,16 @@ def _format_platform(platform):
 
 def _create_settings_tables(settings):
     """
-    Create organized tables from Settings Catalog settings grouped by category.
+    Create a single table from Settings Catalog settings.
     
     :param settings: List of settings from the policy
-    :return: List of tuples (category_name, table)
+    :return: List with single tuple ("Configuration", table)
     """
     if not settings:
         return []
     
-    # Group settings by category
-    categories = {}
+    # Collect all settings in a single list
+    all_settings = []
     
     for setting in settings:
         if "settingInstance" not in setting:
@@ -754,7 +756,7 @@ def _create_settings_tables(settings):
         setting_instance = setting["settingInstance"]
         setting_definition_id = setting_instance.get("settingDefinitionId", "")
         
-        # Extract category from setting definition ID or use enriched data
+        # Extract display name from enriched data or use fallback formatting
         if "settingDefinitions" in setting and setting["settingDefinitions"]:
             # Use enriched display name if available
             display_name = setting["settingDefinitions"][0].get("displayName", "")
@@ -764,25 +766,24 @@ def _create_settings_tables(settings):
             display_name = _format_setting_name(setting_definition_id)
             description = ""
         
-        # Extract category from setting definition ID
-        category = _extract_category_from_id(setting_definition_id)
-        
-        # Extract value
+        # Extract value (now handles children properly)
         value = _extract_setting_value(setting_instance)
         
-        if category not in categories:
-            categories[category] = []
-            
-        categories[category].append([display_name, value])
+        # Handle multi-value results from children
+        if isinstance(value, list):
+            # If there are multiple child values, create separate rows
+            for i, child_value in enumerate(value):
+                child_name = f"{display_name} ({i+1})" if len(value) > 1 else display_name
+                all_settings.append([child_name, str(child_value)])
+        else:
+            all_settings.append([display_name, str(value)])
     
-    # Create tables for each category
-    tables = []
-    for category_name, settings_list in categories.items():
-        if settings_list:
-            table = write_table(settings_list)
-            tables.append((category_name, table))
+    # Create single table with all settings
+    if all_settings:
+        table = write_table(all_settings)
+        return [("Configuration", table)]
     
-    return tables
+    return []
 
 
 def _extract_category_from_id(setting_definition_id):
@@ -865,15 +866,30 @@ def _format_setting_name(setting_definition_id):
 
 def _extract_setting_value(setting_instance):
     """
-    Extract the value from a setting instance.
+    Extract the value from a setting instance, including children values.
     
     :param setting_instance: The setting instance object
-    :return: Formatted setting value
+    :return: Formatted setting value or list of child values
     """
     if "simpleSettingValue" in setting_instance:
         return setting_instance["simpleSettingValue"].get("value", "")
     elif "choiceSettingValue" in setting_instance:
-        choice_value = setting_instance["choiceSettingValue"].get("value", "")
+        choice_value_obj = setting_instance["choiceSettingValue"]
+        
+        # Check if there are children with actual values
+        if "children" in choice_value_obj and choice_value_obj["children"]:
+            child_values = []
+            for child in choice_value_obj["children"]:
+                child_value = _extract_setting_value(child)
+                if child_value and child_value != "Not configured":
+                    child_values.append(child_value)
+            
+            # If we found child values, return them; otherwise fall back to choice value
+            if child_values:
+                return child_values if len(child_values) > 1 else child_values[0]
+        
+        # Fallback to choice value
+        choice_value = choice_value_obj.get("value", "")
         # Try to extract meaningful part from choice value
         if "_" in choice_value:
             parts = choice_value.split("_")
