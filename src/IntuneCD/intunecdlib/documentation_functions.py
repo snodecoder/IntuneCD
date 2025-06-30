@@ -540,6 +540,8 @@ def document_management_intents(configpath, outpath, header, split):
                 elif filename.endswith(".json"):
                     f = open(filename, encoding="utf-8")
                     repo_data = json.load(f)
+                else:
+                    continue
 
                 # Create assignments table
                 assignments_table = ""
