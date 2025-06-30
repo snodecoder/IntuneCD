@@ -188,17 +188,17 @@ def _format_value_for_markdown(value):
 
     value_str = str(value)
     # Check if this looks like XML content
-    if value_str.strip().startswith('```xml') and value_str.strip().endswith('```'):
+    if value_str.strip().startswith('<') and value_str.strip().endswith('>'):
         # Use the first line as summary (up to first newline or 80 chars)
         summary_line = value_str.strip().splitlines()[0] if value_str.strip().splitlines() else value_str.strip()[:80]
         summary = summary_line if len(summary_line) < 80 else summary_line[:77] + '...'
         return (
-            f"<td class='property-column2'><details class='description'><summary data-open='Minimize' data-close='{summary}...expand'></summary>\n\n"
+            f"<details class='description'><summary data-open='Minimize' data-close='{summary}...expand'></summary>\n\n"
             f"```xml\n{value_str.strip()}\n```\n\n"
-            f"</details></td>"
+            f"</details>"
         )
     # JSON pretty print (optional, keep as is)
-    if (value_str.strip().startswith('{') and value_str.strip().endswith('}')) or \
+    elif (value_str.strip().startswith('{') and value_str.strip().endswith('}')) or \
        (value_str.strip().startswith('[') and value_str.strip().endswith(']')):
         try:
             import json
@@ -207,8 +207,14 @@ def _format_value_for_markdown(value):
             return f"```json\n{formatted_json}\n```"
         except Exception:
             pass
-    if len(value_str) > 100:
-        return f"```\n{value_str}\n```"
+    elif len(value_str) > 100:
+        summary_line = value_str.strip().splitlines()[0] if value_str.strip().splitlines() else value_str.strip()[:80]
+        summary = summary_line if len(summary_line) < 80 else summary_line[:77] + '...'
+        return (
+            f"<td class='property-column2'><details class='description'><summary data-open='Minimize' data-close='{summary}...expand'></summary>\n\n"
+            f"```\n{value_str.strip()}\n```\n\n"
+            f"</details></td>"
+        )
     return value_str
 
 
@@ -293,7 +299,7 @@ def clean_list(data, decode):
         if decode and is_base64(s):
             s = decode_base64(s)
         s = _format_value_for_markdown(s)
-        if isinstance(s, str) and len(s) > 200 and not s.startswith('<details'):
+        if  len(s) > 200 and not s.startswith('<details'):
             string = f"<details><summary>Click to expand...</summary>{s}</details>"
         else:
             string = s
