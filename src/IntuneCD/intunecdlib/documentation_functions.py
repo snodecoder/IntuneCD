@@ -188,7 +188,7 @@ def _format_value_for_markdown(value):
 
     value_str = str(value)
     # Check if this looks like XML content
-    if value_str.strip().startswith('<') and value_str.strip().endswith('>'):
+    if value_str.strip().startswith('```xml') and value_str.strip().endswith('```'):
         # Use the first line as summary (up to first newline or 80 chars)
         summary_line = value_str.strip().splitlines()[0] if value_str.strip().splitlines() else value_str.strip()[:80]
         summary = summary_line if len(summary_line) < 80 else summary_line[:77] + '...'
