@@ -176,6 +176,42 @@ def decode_base64(data):
         raise ValueError("Unable to decode data")
 
 
+def _format_value_for_markdown(value):
+    """
+    Format setting value for markdown display, handling XML/JSON structures.
+    If XML, wrap in <details> block with summary and code block.
+    :param value: The setting value to format
+    :return: Formatted value string
+    """
+    if not value or value == "Not configured":
+        return value
+
+    value_str = str(value)
+    # Check if this looks like XML content
+    if value_str.strip().startswith('<') and value_str.strip().endswith('>'):
+        # Use the first line as summary (up to first newline or 80 chars)
+        summary_line = value_str.strip().splitlines()[0] if value_str.strip().splitlines() else value_str.strip()[:80]
+        summary = summary_line if len(summary_line) < 80 else summary_line[:77] + '...'
+        return (
+            f"<td class='property-column2'><details class='description'><summary data-open='Minimize' data-close='{summary}...expand'></summary>\n\n"
+            f"```xml\n{value_str.strip()}\n```\n\n"
+            f"</details></td>"
+        )
+    # JSON pretty print (optional, keep as is)
+    if (value_str.strip().startswith('{') and value_str.strip().endswith('}')) or \
+       (value_str.strip().startswith('[') and value_str.strip().endswith(']')):
+        try:
+            import json
+            parsed = json.loads(value_str)
+            formatted_json = json.dumps(parsed, indent=2)
+            return f"```json\n{formatted_json}\n```"
+        except Exception:
+            pass
+    if len(value_str) > 100:
+        return f"```\n{value_str}\n```"
+    return value_str
+
+
 def clean_list(data, decode):
     """
     This function returns a list with strings to be used in a table.
@@ -189,6 +225,7 @@ def clean_list(data, decode):
             if isinstance(i, (str, int, bool)):
                 if decode and is_base64(i):
                     i = decode_base64(i)
+                i = _format_value_for_markdown(i)
                 string += f"<li> {i} </li>"
             elif isinstance(i, dict):
                 string += dict_to_string(i)
@@ -231,7 +268,7 @@ def clean_list(data, decode):
     def simple_value_to_string(key, val) -> str:
         if decode and is_base64(val):
             val = decode_base64(val)
-
+        val = _format_value_for_markdown(val)
         if isinstance(val, str):
             val = val.replace("\\", "\\\\")
 
@@ -243,6 +280,7 @@ def clean_list(data, decode):
             if isinstance(i, (str, int, bool)):
                 if decode and is_base64(i):
                     i = decode_base64(i)
+                i = _format_value_for_markdown(i)
                 string += f"{i}<br/>"
             if isinstance(i, list):
                 string += list_to_string(i)
@@ -254,8 +292,8 @@ def clean_list(data, decode):
     def string(s) -> str:
         if decode and is_base64(s):
             s = decode_base64(s)
-
-        if len(s) > 200:
+        s = _format_value_for_markdown(s)
+        if isinstance(s, str) and len(s) > 200 and not s.startswith('<details'):
             string = f"<details><summary>Click to expand...</summary>{s}</details>"
         else:
             string = s
