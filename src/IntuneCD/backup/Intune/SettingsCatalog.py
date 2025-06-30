@@ -108,10 +108,10 @@ class SettingsCatalogBackupModule(BaseBackupModule):
         # Collect unique setting definition IDs to batch request definitions
         definition_ids = set()
         for setting in settings:
-            if "settingDefinitions" in setting:
-                for definition in setting["settingDefinitions"]:
-                    if "id" in definition:
-                        definition_ids.add(definition["id"])
+            if "settingInstance" in setting:
+                setting_instance = setting["settingInstance"]
+                if "settingDefinitionId" in setting_instance:
+                    definition_ids.add(setting_instance["settingDefinitionId"])
         
         if not definition_ids:
             return settings
@@ -151,16 +151,17 @@ class SettingsCatalogBackupModule(BaseBackupModule):
             enriched_settings = []
             for setting in settings:
                 enriched_setting = setting.copy()
-                if "settingDefinitions" in setting:
-                    enriched_definitions = []
-                    for definition in setting["settingDefinitions"]:
-                        if "id" in definition and definition["id"] in definition_map:
-                            enriched_definition = definition.copy()
-                            enriched_definition.update(definition_map[definition["id"]])
-                            enriched_definitions.append(enriched_definition)
-                        else:
-                            enriched_definitions.append(definition)
-                    enriched_setting["settingDefinitions"] = enriched_definitions
+                if "settingInstance" in setting:
+                    setting_instance = setting["settingInstance"]
+                    if "settingDefinitionId" in setting_instance:
+                        definition_id = setting_instance["settingDefinitionId"]
+                        if definition_id in definition_map:
+                            # Add settingDefinitions array to maintain compatibility with documentation
+                            enriched_setting["settingDefinitions"] = [{
+                                "id": definition_id,
+                                "displayName": definition_map[definition_id]["displayName"],
+                                "description": definition_map[definition_id]["description"]
+                            }]
                 enriched_settings.append(enriched_setting)
                 
             return enriched_settings

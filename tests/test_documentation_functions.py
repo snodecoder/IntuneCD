@@ -178,9 +178,10 @@ class TestDocumentationFunctions(unittest.TestCase):
 
     def test_process_settings_catalog_settings(self):
         """Test Settings Catalog settings processing for readable documentation."""
-        # Mock Settings Catalog data structure
+        # Mock Settings Catalog data structure matching real Microsoft Graph API response
         settings_data = [
             {
+                "id": "0",
                 "settingDefinitions": [
                     {
                         "id": "device_vendor_msft_policy_config_defender_allowfullscanremovabledrive",
@@ -190,6 +191,7 @@ class TestDocumentationFunctions(unittest.TestCase):
                 ],
                 "settingInstance": {
                     "@odata.type": "#microsoft.graph.deviceManagementConfigurationSimpleSettingInstance",
+                    "settingDefinitionId": "device_vendor_msft_policy_config_defender_allowfullscanremovabledrive",
                     "simpleSettingValue": {
                         "@odata.type": "#microsoft.graph.deviceManagementConfigurationStringSettingValue",
                         "value": "allowed"
@@ -197,6 +199,7 @@ class TestDocumentationFunctions(unittest.TestCase):
                 }
             },
             {
+                "id": "1", 
                 "settingDefinitions": [
                     {
                         "id": "device_vendor_msft_policy_config_defender_realTimeProtection",
@@ -206,6 +209,7 @@ class TestDocumentationFunctions(unittest.TestCase):
                 ],
                 "settingInstance": {
                     "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingInstance", 
+                    "settingDefinitionId": "device_vendor_msft_policy_config_defender_realTimeProtection",
                     "choiceSettingValue": {
                         "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingValue",
                         "value": "device_vendor_msft_policy_config_defender_realTimeProtection_1"
@@ -234,16 +238,16 @@ class TestDocumentationFunctions(unittest.TestCase):
 
     def test_process_settings_catalog_settings_fallback(self):
         """Test Settings Catalog settings processing falls back to ID manipulation when no displayName."""
+        # Test fallback scenario: no enriched settingDefinitions, just raw settingInstance
         settings_data = [
             {
-                "settingDefinitions": [
-                    {
-                        "id": "device_vendor_msft_policy_config_defender_allowFullScan"
-                    }
-                ],
+                "id": "0",
                 "settingInstance": {
+                    "@odata.type": "#microsoft.graph.deviceManagementConfigurationSimpleSettingInstance",
+                    "settingDefinitionId": "device_vendor_msft_policy_config_localpoliciessecurityoptions_interactivelogon_machineinactivitylimit_v2",
                     "simpleSettingValue": {
-                        "value": "enabled"
+                        "@odata.type": "#microsoft.graph.deviceManagementConfigurationIntegerSettingValue",
+                        "value": 14400
                     }
                 }
             }
@@ -251,7 +255,9 @@ class TestDocumentationFunctions(unittest.TestCase):
         
         result = _process_settings_catalog_settings(settings_data)
         
-        # Should fall back to processing the ID
+        # Verify fallback processing works
         self.assertEqual(len(result), 1)
-        self.assertEqual(result[0][0], "Allow Full Scan")  # Converted from allowFullScan
-        self.assertEqual(result[0][1], "enabled")
+        # Should extract "machineinactivitylimit_v2" and format it as "Machineinactivitylimit V2"
+        expected_name = "Machineinactivitylimit V2"  # This is what the ID formatting logic should produce
+        self.assertEqual(result[0][0], expected_name)
+        self.assertEqual(result[0][1], "14400")

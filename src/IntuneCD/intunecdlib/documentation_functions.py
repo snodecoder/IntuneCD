@@ -430,7 +430,10 @@ def _process_settings_catalog_settings(settings_list: list) -> list:
         return settings_table_data
     
     for setting in settings_list:
-        # Extract setting definition information
+        setting_name = ""
+        setting_value = ""
+        
+        # Check if setting has enriched definitions (from backup enrichment)
         if "settingDefinitions" in setting:
             for definition in setting["settingDefinitions"]:
                 # Use displayName if available from enriched data, otherwise fall back to ID manipulation
@@ -439,69 +442,132 @@ def _process_settings_catalog_settings(settings_list: list) -> list:
                 else:
                     # Fall back to processing the ID like Management Intents
                     setting_id = definition.get("id", "")
-                    if "_" in setting_id:
-                        setting_name = setting_id.split("_")[-1]  # Take last part after underscore
-                    else:
-                        setting_name = setting_id
+                    setting_name = _format_setting_name_from_id(setting_id)
                     
-                    # Convert camelCase/PascalCase to readable format
-                    if setting_name:
-                        setting_name = setting_name[0].upper() + setting_name[1:] if setting_name else ""
-                        setting_name = re.findall("[A-Z][^A-Z]*", setting_name)
-                        setting_name = " ".join(setting_name)
-                
-                # Extract setting value
-                setting_value = ""
-                if "settingInstance" in setting:
-                    setting_instance = setting["settingInstance"]
-                    
-                    # Handle different setting value types
-                    if "simpleSettingValue" in setting_instance:
-                        simple_value = setting_instance["simpleSettingValue"]
-                        if "value" in simple_value:
-                            setting_value = str(simple_value["value"])
-                    elif "choiceSettingValue" in setting_instance:
-                        choice_value = setting_instance["choiceSettingValue"]
-                        if "value" in choice_value:
-                            setting_value = str(choice_value["value"])
-                        # Also show child settings if they exist
-                        if "children" in choice_value:
-                            child_values = []
-                            for child in choice_value["children"]:
-                                if "settingDefinitions" in child:
-                                    child_settings = _process_settings_catalog_settings([child])
-                                    child_values.extend([f"  {name}: {val}" for name, val in child_settings])
-                            if child_values:
-                                setting_value += "<br />Children:<br />" + "<br />".join(child_values)
-                    elif "groupSettingCollectionValue" in setting_instance:
-                        collection_value = setting_instance["groupSettingCollectionValue"]
-                        if "value" in collection_value:
-                            collection_items = []
-                            for item in collection_value["value"]:
-                                if "children" in item:
-                                    item_settings = _process_settings_catalog_settings(item["children"])
-                                    item_str = "<br />".join([f"  {name}: {val}" for name, val in item_settings])
-                                    collection_items.append(item_str)
-                            setting_value = "<br />".join(collection_items)
-                    
-                    # Format complex values for better readability
-                    if isinstance(setting_value, str) and len(setting_value.split(",")) > 1:
-                        vals = []
-                        for v in setting_value.split(","):
-                            v = v.strip()
-                            if ":" in v:
-                                v = f'**{v.replace(":", ":** ")}'
-                            vals.append(v)
-                        setting_value = "<br />".join(vals)
-                
                 # Add description if available from enriched data
                 description = definition.get("description", "")
                 if description:
                     setting_name += f"<br /><em>{description}</em>"
+                    
+                break  # Only process first definition for now
+        else:
+            # Fallback: extract settingDefinitionId from settingInstance
+            if "settingInstance" in setting:
+                setting_instance = setting["settingInstance"]
+                if "settingDefinitionId" in setting_instance:
+                    setting_id = setting_instance["settingDefinitionId"]
+                    setting_name = _format_setting_name_from_id(setting_id)
+        
+        # Extract setting value
+        if "settingInstance" in setting:
+            setting_instance = setting["settingInstance"]
+            
+            # Handle different setting value types
+            if "simpleSettingValue" in setting_instance:
+                simple_value = setting_instance["simpleSettingValue"]
+                if "value" in simple_value:
+                    setting_value = str(simple_value["value"])
+            elif "choiceSettingValue" in setting_instance:
+                choice_value = setting_instance["choiceSettingValue"]
+                if "value" in choice_value:
+                    setting_value = str(choice_value["value"])
+                # Also show child settings if they exist
+                if "children" in choice_value:
+                    child_values = []
+                    for child in choice_value["children"]:
+                        child_settings = _process_settings_catalog_settings([child])
+                        child_values.extend([f"  {name}: {val}" for name, val in child_settings])
+                    if child_values:
+                        setting_value += "<br />Children:<br />" + "<br />".join(child_values)
+            elif "groupSettingCollectionValue" in setting_instance:
+                collection_value = setting_instance["groupSettingCollectionValue"]
+                if "value" in collection_value:
+                    collection_items = []
+                    for item in collection_value["value"]:
+                        if "children" in item:
+                            item_settings = _process_settings_catalog_settings(item["children"])
+                            item_str = "<br />".join([f"  {name}: {val}" for name, val in item_settings])
+                            collection_items.append(item_str)
+                    setting_value = "<br />".join(collection_items)
                 
-                settings_table_data.append([setting_name, setting_value])
+            # Format complex values for better readability
+            if isinstance(setting_value, str) and len(setting_value.split(",")) > 1:
+                vals = []
+                for v in setting_value.split(","):
+                    v = v.strip()
+                    if ":" in v:
+                        v = f'**{v.replace(":", ":** ")}'
+                    vals.append(v)
+                setting_value = "<br />".join(vals)
+        
+        # Only add to table if we have both name and value
+        if setting_name and setting_value:
+            settings_table_data.append([setting_name, setting_value])
     
     return settings_table_data
+
+
+def _format_setting_name_from_id(setting_id: str) -> str:
+    """
+    Format a setting name from a setting definition ID by converting it to readable format.
+    
+    :param setting_id: The setting definition ID
+    :return: Formatted readable setting name
+    """
+    if not setting_id:
+        return ""
+        
+    # For Settings Catalog IDs, extract meaningful part by looking for common patterns
+    if "device_vendor_msft_policy_config_" in setting_id:
+        # Remove the common prefix to get the actual setting name
+        parts = setting_id.replace("device_vendor_msft_policy_config_", "").split("_")
+        # Take the last 2-3 parts for better context, avoiding very generic terms
+        if len(parts) >= 2:
+            # Look for meaningful parts, excluding generic ones
+            meaningful_parts = []
+            for part in parts:
+                if part and part.lower() not in ['config', 'policy', 'device', 'vendor', 'msft']:
+                    meaningful_parts.append(part)
+            # Take the last 2 meaningful parts for better readability
+            if len(meaningful_parts) >= 2:
+                setting_name = "_".join(meaningful_parts[-2:])
+            elif meaningful_parts:
+                setting_name = meaningful_parts[-1]
+            else:
+                setting_name = parts[-1] if parts else setting_id
+        else:
+            setting_name = parts[-1] if parts else setting_id
+    else:
+        # For other types of IDs, take the last part after underscore
+        if "_" in setting_id:
+            setting_name = setting_id.split("_")[-1]
+        else:
+            setting_name = setting_id
+        
+    # Convert camelCase/PascalCase to readable format
+    if setting_name:
+        # Handle underscore-separated words first
+        if "_" in setting_name:
+            words = setting_name.split("_")
+            formatted_words = []
+            for word in words:
+                if word:
+                    # Capitalize first letter and handle camelCase within the word
+                    word = word[0].upper() + word[1:] if word else ""
+                    camel_parts = re.findall("[A-Z][^A-Z]*", word)
+                    if camel_parts:
+                        formatted_words.extend(camel_parts)
+                    else:
+                        formatted_words.append(word)
+            setting_name = " ".join(formatted_words)
+        else:
+            # Handle pure camelCase/PascalCase
+            setting_name = setting_name[0].upper() + setting_name[1:] if setting_name else ""
+            camel_parts = re.findall("[A-Z][^A-Z]*", setting_name)
+            if camel_parts:
+                setting_name = " ".join(camel_parts)
+    
+    return setting_name
 
 
 def document_management_intents(configpath, outpath, header, split):
