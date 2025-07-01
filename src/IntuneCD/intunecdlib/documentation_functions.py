@@ -190,8 +190,8 @@ def _format_value_for_markdown(value):
     # Check if this looks like XML content
     if value_str.strip().startswith('<') and value_str.strip().endswith('>'):
         return (
-            f"<details class='description'><summary data-open='Minimize' data-close='...expand...'></summary>"
-            f"```xml\n{value_str.strip()}\n```"
+            f"<details class='description'><summary data-open='Minimize' data-close='...expand...'></summary>\n\n"
+            f"```xml\n{value_str.strip()}\n```\n\n"
             f"</details>"
         )
     # JSON pretty print (optional, keep as is)
@@ -201,7 +201,7 @@ def _format_value_for_markdown(value):
             import json
             parsed = json.loads(value_str)
             formatted_json = json.dumps(parsed, indent=2)
-            return f"```json\n{formatted_json}\n```"
+            return f"\n\n```json\n{formatted_json}\n```\n\n"
         except Exception:
             pass
     return value_str
