@@ -1062,35 +1062,38 @@ def _extract_setting_value(setting_instance):
         return value if value != "" else "Not configured"
     elif "choiceSettingValue" in setting_instance:
         choice_value_obj = setting_instance["choiceSettingValue"]
-        results = []
-        # Always add the main choice value first
+
+        # Check if there are children with actual values
+        if "children" in choice_value_obj and choice_value_obj["children"]:
+            child_values = []
+            for child in choice_value_obj["children"]:
+                child_value = _extract_setting_value(child)
+                if child_value and child_value != "Not configured" and child_value != "":
+                    child_values.append(child_value)
+
+            # If we found child values, return them; otherwise fall back to choice value
+            if child_values:
+                return child_values if len(child_values) > 1 else child_values[0]
+
+        # Fallback to choice value
         choice_value = choice_value_obj.get("value", "")
         if choice_value:
-            # Extract meaningful part if possible
+            # Try to extract meaningful part from choice value
             if "_" in choice_value:
                 parts = choice_value.split("_")
                 if len(parts) > 1:
                     meaningful_part = parts[-1]
+                    # Return the meaningful part, but only if it's not just "selected"
                     if meaningful_part.lower() not in ["selected", "enabled", "disabled"]:
-                        results.append(meaningful_part.title())
-                    else:
-                        results.append(choice_value)
-                else:
-                    results.append(choice_value)
-            else:
-                results.append(choice_value)
-        # Add children values if present
-        if "children" in choice_value_obj and choice_value_obj["children"]:
-            for child in choice_value_obj["children"]:
-                child_value = _extract_setting_value(child)
-                if child_value and child_value != "Not configured" and child_value != "":
-                    results.append(child_value)
-        return results if results else "Not configured"
+                        return meaningful_part.title()
+            return choice_value
+        return "Not configured"
     elif "groupSettingCollectionValue" in setting_instance:
         collection = setting_instance["groupSettingCollectionValue"]
         if isinstance(collection, list) and len(collection) > 0:
             extracted = []
             for item in collection:
+                # If the item has children, extract their values
                 if "children" in item and item["children"]:
                     child_values = []
                     for child in item["children"]:
@@ -1098,11 +1101,14 @@ def _extract_setting_value(setting_instance):
                         if child_value and child_value != "Not configured" and child_value != "":
                             child_values.append(child_value)
                     if child_values:
+                        # If only one value, don't wrap in list
                         extracted.append(child_values if len(child_values) > 1 else child_values[0])
                 else:
+                    # Fallback: try to extract value directly
                     value = item.get("value", None)
                     if value:
                         extracted.append(value)
+            # Flatten if only one item
             if len(extracted) == 1:
                 return extracted[0]
             return extracted if extracted else "Not configured"
