@@ -941,7 +941,7 @@ def _create_settings_tables(settings):
         description = definition.get("description", "")
         # Collapse multiple newlines to a single newline, then trim trailing spaces/tabs
         if isinstance(description, str):
-            description = re.sub(r'((\r\n|\r|\n){2,})', r'\n', description)
+            description = re.sub(r'((\r\n|\r|\n){2,})', r'\r\n', description)
             description = description.rstrip(' \t')
 
         # Handle simple value
