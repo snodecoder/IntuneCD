@@ -69,7 +69,7 @@ def escape_markdown(text):
     return parse
 
 
-def replace_newlines_with_br(text):
+def _replace_newlines_with_br(text):
     if isinstance(text, str):
         # Replace all \r\n, \n, or \r with <br>
         text = re.sub(r'(\r\n|\r|\n)', '<br>', text)
@@ -844,7 +844,7 @@ def _create_settings_tables(settings):
     for category in sorted_categories:
         # Add a visually distinctive row for the category
         table_rows.append([
-            f"<tr style='background-color:#e0e0e0;font-weight:bold;'><td colspan='3'>{category}</td></tr>"
+            f"<tr style='font-weight:bold;'><td colspan='3'>{category}</td></tr>"
         ])
         # Add all settings for this category
         table_rows.extend(category_map[category])
@@ -862,7 +862,7 @@ def _create_settings_tables(settings):
                 # Raw HTML row (category header)
                 table += row[0] if isinstance(row, list) else row
             else:
-                table += "<tr>" + "".join(f"<td>{cell}</td>" for cell in row) + "</tr>\n"
+                table += "<tr>" + "".join(f"<td>{_replace_newlines_with_br(cell)}</td>" for cell in row) + "</tr>\n"
         table += "</tbody>\n</table>"
         return table
 
