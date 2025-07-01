@@ -189,12 +189,9 @@ def _format_value_for_markdown(value):
     value_str = str(value)
     # Check if this looks like XML content
     if value_str.strip().startswith('<') and value_str.strip().endswith('>'):
-        # Use the first line as summary (up to first newline or 80 chars)
-        summary_line = value_str.strip().splitlines()[0] if value_str.strip().splitlines() else value_str.strip()[:80]
-        summary = summary_line if len(summary_line) < 80 else summary_line[:77] + '...'
         return (
-            f"<details class='description'><summary data-open='Minimize' data-close='{summary}...expand'></summary>\n\n"
-            f"```xml\n{value_str.strip()}\n```\n\n"
+            f"<details class='description'><summary data-open='Minimize' data-close='...expand...'></summary>"
+            f"```xml\n{value_str.strip()}\n```"
             f"</details>"
         )
     # JSON pretty print (optional, keep as is)
@@ -936,10 +933,9 @@ def _create_settings_tables(settings):
             description = re.sub(r'((\r\n|\r|\n){2,})', r'\r\n', description)
             description = description.rstrip(' \t')
             # If description is too long, show summary and details
-            if len(description) > 180:
-                summary = description[:180].replace('\r', ' ').replace('\n', ' ') + "...expand"
+            if len(description) > 60:
                 description = (
-                    f"<details><summary>{summary}</summary>"
+                    f"<details><summary>...expand...</summary>"
                     f"{description}</details>"
                 )
 

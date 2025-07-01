@@ -159,6 +159,22 @@ class SettingsCatalogBackupModule(BaseBackupModule):
                             "displayName": option.get("displayName", ""),
                             "value": option.get("optionValue", {}).get("value", None)
                         })
+                # Add categoryDisplayName for the main (root) setting definition
+                if "categoryId" in definition:
+                    try:
+                        rootCategoryId = self.make_graph_request(
+                            endpoint=f"{self.endpoint}/beta/deviceManagement/configurationCategories/{definition['categoryId']}?$select=rootCategoryId"
+                        )
+                        category = self.make_graph_request(
+                            endpoint=f"{self.endpoint}/beta/deviceManagement/configurationCategories/{rootCategoryId['rootCategoryId']}?$select=displayName"
+                        )
+                        entry["categoryDisplayName"] = category.get("displayName", "")
+                    except Exception as e:
+                        self.log(
+                            tag="warning",
+                            msg=f"Could not retrieve category for {def_id}: {e}"
+                        )
+                        entry["categoryDisplayName"] = ""
                 definition_map[def_id] = entry
             except Exception as e:
                 self.log(
