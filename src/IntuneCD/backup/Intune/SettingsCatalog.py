@@ -105,11 +105,21 @@ class SettingsCatalogBackupModule(BaseBackupModule):
         # Recursively collect all settingDefinitionIds from a settingInstance and its children
         def collect_definition_ids(instance):
             ids = set()
-            if "settingDefinitionId" in instance:
-                ids.add(instance["settingDefinitionId"])
-            if "children" in instance and isinstance(instance["children"], list):
-                for child in instance["children"]:
-                    ids.update(collect_definition_ids(child))
+            if isinstance(instance, dict):
+                if "settingDefinitionId" in instance:
+                    ids.add(instance["settingDefinitionId"])
+                # Check for children in all possible value containers
+                for key in ["children", "choiceSettingValue", "simpleSettingValue", "groupSettingCollectionValue"]:
+                    if key in instance:
+                        value = instance[key]
+                        if isinstance(value, list):
+                            for child in value:
+                                ids.update(collect_definition_ids(child))
+                        elif isinstance(value, dict):
+                            ids.update(collect_definition_ids(value))
+            elif isinstance(instance, list):
+                for item in instance:
+                    ids.update(collect_definition_ids(item))
             return ids
 
         # Gather all unique definition IDs from all settings (including nested)
@@ -149,24 +159,38 @@ class SettingsCatalogBackupModule(BaseBackupModule):
                     }
 
             # Recursively build settingDefinitions for a settingInstance and its children
-            def build_setting_definitions(instance):
+            def build_setting_definitions(instance, seen=None):
+                if seen is None:
+                    seen = set()
                 defs = []
-                def_id = instance.get("settingDefinitionId")
-                if def_id and def_id in definition_map:
-                    defs.append({
-                        "id": def_id,
-                        "displayName": definition_map[def_id]["displayName"],
-                        "description": definition_map[def_id]["description"]
-                    })
-                if "children" in instance and isinstance(instance["children"], list):
-                    for child in instance["children"]:
-                        defs.extend(build_setting_definitions(child))
+                if isinstance(instance, dict):
+                    def_id = instance.get("settingDefinitionId")
+                    if def_id and def_id in definition_map and def_id not in seen:
+                        defs.append({
+                            "id": def_id,
+                            "displayName": definition_map[def_id]["displayName"],
+                            "description": definition_map[def_id]["description"]
+                        })
+                        seen.add(def_id)
+                    # Check for children in all possible value containers
+                    for key in ["children", "choiceSettingValue", "simpleSettingValue", "groupSettingCollectionValue"]:
+                        if key in instance:
+                            value = instance[key]
+                            if isinstance(value, list):
+                                for child in value:
+                                    defs.extend(build_setting_definitions(child, seen))
+                            elif isinstance(value, dict):
+                                defs.extend(build_setting_definitions(value, seen))
+                elif isinstance(instance, list):
+                    for item in instance:
+                        defs.extend(build_setting_definitions(item, seen))
                 return defs
 
             enriched_settings = []
             for setting in settings:
                 enriched_setting = setting.copy()
                 if "settingInstance" in setting:
+                    # Use a set to avoid duplicate definitions
                     enriched_setting["settingDefinitions"] = build_setting_definitions(setting["settingInstance"])
                 enriched_settings.append(enriched_setting)
 
