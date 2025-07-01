@@ -93,37 +93,38 @@ class SettingsCatalogBackupModule(BaseBackupModule):
 
         return self.results
 
+
     def _enrich_settings_with_definitions(self, settings: list) -> list:
         """
-        Enrich settings with display names and descriptions from setting definitions.
-        This method retrieves additional metadata from Microsoft Graph API to make 
-        Settings Catalog documentation more readable and user-friendly.
-        
-        :param settings: List of settings from the policy
-        :return: List of enriched settings with displayName and description
+        Enrich settings with display names and descriptions from setting definitions,
+        including all nested children.
         """
         if not settings:
             return settings
-            
-        # Collect unique setting definition IDs to batch request definitions
+
+        # Recursively collect all settingDefinitionIds from a settingInstance and its children
+        def collect_definition_ids(instance):
+            ids = set()
+            if "settingDefinitionId" in instance:
+                ids.add(instance["settingDefinitionId"])
+            if "children" in instance and isinstance(instance["children"], list):
+                for child in instance["children"]:
+                    ids.update(collect_definition_ids(child))
+            return ids
+
+        # Gather all unique definition IDs from all settings (including nested)
         definition_ids = set()
         for setting in settings:
             if "settingInstance" in setting:
-                setting_instance = setting["settingInstance"]
-                if "settingDefinitionId" in setting_instance:
-                    definition_ids.add(setting_instance["settingDefinitionId"])
-        
+                definition_ids.update(collect_definition_ids(setting["settingInstance"]))
+
         if not definition_ids:
             return settings
-            
-        # Get setting definitions to retrieve display names and descriptions
+
         try:
-            # Convert set to list for batch request
             definition_ids_list = list(definition_ids)
             definition_responses = []
-            
-            # Make requests for setting definitions in batches
-            for i in range(0, len(definition_ids_list), 20):  # Process in chunks of 20
+            for i in range(0, len(definition_ids_list), 20):
                 batch_ids = definition_ids_list[i:i+20]
                 for def_id in batch_ids:
                     try:
@@ -133,12 +134,12 @@ class SettingsCatalogBackupModule(BaseBackupModule):
                         definition_responses.append(definition_response)
                     except Exception as e:
                         self.log(
-                            tag="warning", 
+                            tag="warning",
                             msg=f"Could not retrieve definition for {def_id}: {e}"
                         )
                         continue
-            
-            # Create mapping of definition ID to display name and description
+
+            # Map definition ID to display name and description
             definition_map = {}
             for definition in definition_responses:
                 if "id" in definition:
@@ -146,29 +147,34 @@ class SettingsCatalogBackupModule(BaseBackupModule):
                         "displayName": definition.get("displayName", ""),
                         "description": definition.get("description", "")
                     }
-            
-            # Enrich settings with display names and descriptions
+
+            # Recursively build settingDefinitions for a settingInstance and its children
+            def build_setting_definitions(instance):
+                defs = []
+                def_id = instance.get("settingDefinitionId")
+                if def_id and def_id in definition_map:
+                    defs.append({
+                        "id": def_id,
+                        "displayName": definition_map[def_id]["displayName"],
+                        "description": definition_map[def_id]["description"]
+                    })
+                if "children" in instance and isinstance(instance["children"], list):
+                    for child in instance["children"]:
+                        defs.extend(build_setting_definitions(child))
+                return defs
+
             enriched_settings = []
             for setting in settings:
                 enriched_setting = setting.copy()
                 if "settingInstance" in setting:
-                    setting_instance = setting["settingInstance"]
-                    if "settingDefinitionId" in setting_instance:
-                        definition_id = setting_instance["settingDefinitionId"]
-                        if definition_id in definition_map:
-                            # Add settingDefinitions array to maintain compatibility with documentation
-                            enriched_setting["settingDefinitions"] = [{
-                                "id": definition_id,
-                                "displayName": definition_map[definition_id]["displayName"],
-                                "description": definition_map[definition_id]["description"]
-                            }]
+                    enriched_setting["settingDefinitions"] = build_setting_definitions(setting["settingInstance"])
                 enriched_settings.append(enriched_setting)
-                
+
             return enriched_settings
-            
+
         except Exception as e:
             self.log(
-                tag="warning", 
+                tag="warning",
                 msg=f"Error enriching settings with definitions: {e}"
             )
             return settings
