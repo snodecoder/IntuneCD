@@ -950,6 +950,20 @@ def _create_settings_tables(settings):
             formatted_value = _format_value_for_markdown(value if value != "" else "Not configured")
             return [[display_name, formatted_value, description]]
 
+        # Handle simple setting collection value
+        elif "simpleSettingCollectionValue" in setting_instance:
+            collection = setting_instance["simpleSettingCollectionValue"]
+            if isinstance(collection, list) and collection:
+                values = []
+                for item in collection:
+                    val = item.get("value", "")
+                    if val != "":
+                        values.append(str(val))
+                formatted_value = _format_value_for_markdown("\n".join(values) if values else "Not configured")
+                return [[display_name, formatted_value, description]]
+            else:
+                return [[display_name, "Not configured", description]]
+
         # Handle choice value (with possible children)
         elif "choiceSettingValue" in setting_instance:
             choice_value_obj = setting_instance["choiceSettingValue"]
