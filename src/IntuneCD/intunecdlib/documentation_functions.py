@@ -797,106 +797,6 @@ def _format_date(date_string):
         return date_string
 
 
-def _process_settings_catalog_settings(settings):
-    """
-    Process Settings Catalog settings to extract readable names and values.
-    This function is used primarily for testing the setting processing logic.
-
-    :param settings: List of settings from Settings Catalog policy
-    :return: List of [name, value] pairs
-    """
-    if not settings:
-        return []
-
-    processed_settings = []
-
-    for setting in settings:
-        if "settingInstance" not in setting:
-            continue
-
-        setting_instance = setting["settingInstance"]
-        setting_definition_id = setting_instance.get("settingDefinitionId", "")
-
-        # Extract display name from enriched data or use fallback formatting
-        if "settingDefinitions" in setting and setting["settingDefinitions"]:
-            # Use enriched display name if available
-            display_name = setting["settingDefinitions"][0].get("displayName", "")
-            description = setting["settingDefinitions"][0].get("description", "")
-            # Format with description as expected by tests
-            name_with_desc = f"{display_name}<br /><em>{description}</em>" if description else display_name
-        else:
-            # Fallback to formatting the ID - use simple formatting for test compatibility
-            name_with_desc = _format_setting_name_for_tests(setting_definition_id)
-
-        # Extract value - use simple extraction for test compatibility
-        value = _extract_setting_value_for_tests(setting_instance)
-
-        # Handle multi-value results from children
-        if isinstance(value, list):
-            # If there are multiple child values, create separate entries
-            for i, child_value in enumerate(value):
-                child_name = f"{name_with_desc} ({i+1})" if len(value) > 1 else name_with_desc
-                processed_settings.append([child_name, str(child_value)])
-        else:
-            processed_settings.append([name_with_desc, str(value)])
-
-    return processed_settings
-
-
-def _format_setting_name_for_tests(setting_definition_id):
-    """
-    Format setting definition ID into a readable name for test compatibility.
-    This uses simpler logic than the main formatting function.
-
-    :param setting_definition_id: The setting definition ID
-    :return: Formatted setting name
-    """
-    if not setting_definition_id:
-        return "Unknown Setting"
-
-    # Extract the meaningful part from the ID
-    parts = setting_definition_id.split("_")
-
-    # Find the last meaningful parts (usually after the category)
-    if len(parts) > 3:
-        # For test compatibility, take only the last 2 parts
-        meaningful_parts = parts[-2:]
-        # Join and format
-        name = " ".join(meaningful_parts)
-        # Convert to title case, handling version numbers
-        name = re.sub(r'v(\d+)', r'V\1', name)  # Convert v2 to V2
-        name = re.sub(r'([a-z])([A-Z])', r'\1 \2', name)  # Add spaces before capitals
-        return name.title()
-
-    # Fallback to just converting underscores to spaces and title case
-    return setting_definition_id.replace("_", " ").title()
-
-
-def _extract_setting_value_for_tests(setting_instance):
-    """
-    Extract the value from a setting instance for test compatibility.
-    This uses simpler logic than the main extraction function.
-
-    :param setting_instance: The setting instance object
-    :return: Setting value
-    """
-    if "simpleSettingValue" in setting_instance:
-        value = setting_instance["simpleSettingValue"].get("value", "")
-        return value if value != "" else "Not configured"
-    elif "choiceSettingValue" in setting_instance:
-        choice_value_obj = setting_instance["choiceSettingValue"]
-        # For tests, return the full choice value without modification
-        choice_value = choice_value_obj.get("value", "")
-        return choice_value if choice_value else "Not configured"
-    elif "groupSettingCollectionValue" in setting_instance:
-        collection = setting_instance["groupSettingCollectionValue"]
-        if isinstance(collection, list) and len(collection) > 0:
-            return f"{len(collection)} items"
-        return "Collection value"
-
-    return "Not configured"
-
-
 def _create_settings_tables(settings):
     """
     Create a settings table grouped and sorted by categoryDisplayName, with a visually distinctive row for each category.
@@ -961,6 +861,7 @@ def _create_settings_tables(settings):
 
     table = custom_html_table(headers, table_rows)
     return [("Configuration", table)]
+
 
 def _extract_setting_rows_for_category(setting_instance, parent_definitions, definitions_lookup):
     """
@@ -1030,6 +931,7 @@ def _extract_setting_rows_for_category(setting_instance, parent_definitions, def
 
     return extract_setting(setting_instance, parent_definitions)
 
+
 def _write_clean_table(headers, data):
     """
     Create a clean, compact HTML table.
@@ -1040,52 +942,6 @@ def _write_clean_table(headers, data):
     if not data:
         return ""
     return html_table(headers, data)
-
-
-def _extract_category_from_id(setting_definition_id):
-    """
-    Extract category name from setting definition ID.
-
-    :param setting_definition_id: The setting definition ID
-    :return: Category name
-    """
-    if not setting_definition_id:
-        return "Other Settings"
-
-    # Common patterns for extracting categories
-    category_patterns = {
-        "localpoliciessecurityoptions": "Local Policies Security Options",
-        "defender": "Microsoft Defender",
-        "devicelock": "Device Lock",
-        "wifi": "Wi-Fi",
-        "bluetooth": "Bluetooth",
-        "browser": "Browser",
-        "privacy": "Privacy",
-        "system": "System",
-        "network": "Network",
-        "security": "Security",
-        "accounts": "Accounts",
-        "applications": "Applications"
-    }
-
-    # Convert to lowercase for matching
-    id_lower = setting_definition_id.lower()
-
-    # Look for category patterns in the ID
-    for pattern, category_name in category_patterns.items():
-        if pattern in id_lower:
-            return category_name
-
-    # Fallback: try to extract from policy config pattern
-    if "policy_config_" in id_lower:
-        # Extract the part after policy_config_
-        parts = id_lower.split("policy_config_")
-        if len(parts) > 1:
-            category_part = parts[1].split("_")[0]
-            # Convert to title case
-            return category_part.replace("", " ").title()
-
-    return "Other Settings"
 
 
 def _format_setting_name(setting_definition_id):

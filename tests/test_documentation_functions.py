@@ -14,7 +14,6 @@ from src.IntuneCD.intunecdlib.documentation_functions import (
     md_file,
     remove_characters,
     write_table,
-    _process_settings_catalog_settings,
 )
 
 
@@ -175,89 +174,3 @@ class TestDocumentationFunctions(unittest.TestCase):
         self.expected_list = ["./config/test_file_name.md"]
 
         self.assertEqual(get_md_files(self.directory.path), self.expected_list)
-
-    def test_process_settings_catalog_settings(self):
-        """Test Settings Catalog settings processing for readable documentation."""
-        # Mock Settings Catalog data structure matching real Microsoft Graph API response
-        settings_data = [
-            {
-                "id": "0",
-                "settingDefinitions": [
-                    {
-                        "id": "device_vendor_msft_policy_config_defender_allowfullscanremovabledrive",
-                        "displayName": "Allow Full Scan Removable Drive", 
-                        "description": "Allow or disallow full scan of removable drives"
-                    }
-                ],
-                "settingInstance": {
-                    "@odata.type": "#microsoft.graph.deviceManagementConfigurationSimpleSettingInstance",
-                    "settingDefinitionId": "device_vendor_msft_policy_config_defender_allowfullscanremovabledrive",
-                    "simpleSettingValue": {
-                        "@odata.type": "#microsoft.graph.deviceManagementConfigurationStringSettingValue",
-                        "value": "allowed"
-                    }
-                }
-            },
-            {
-                "id": "1", 
-                "settingDefinitions": [
-                    {
-                        "id": "device_vendor_msft_policy_config_defender_realTimeProtection",
-                        "displayName": "Real-time Protection",
-                        "description": "Enable real-time protection"
-                    }
-                ],
-                "settingInstance": {
-                    "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingInstance", 
-                    "settingDefinitionId": "device_vendor_msft_policy_config_defender_realTimeProtection",
-                    "choiceSettingValue": {
-                        "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingValue",
-                        "value": "device_vendor_msft_policy_config_defender_realTimeProtection_1"
-                    }
-                }
-            }
-        ]
-        
-        result = _process_settings_catalog_settings(settings_data)
-        
-        # Verify the function returns readable setting names and values
-        self.assertEqual(len(result), 2)
-        
-        # First setting should use display name
-        self.assertEqual(result[0][0], "Allow Full Scan Removable Drive<br /><em>Allow or disallow full scan of removable drives</em>")
-        self.assertEqual(result[0][1], "allowed")
-        
-        # Second setting should use display name  
-        self.assertEqual(result[1][0], "Real-time Protection<br /><em>Enable real-time protection</em>")
-        self.assertEqual(result[1][1], "device_vendor_msft_policy_config_defender_realTimeProtection_1")
-
-    def test_process_settings_catalog_settings_empty(self):
-        """Test Settings Catalog settings processing with empty data."""
-        result = _process_settings_catalog_settings([])
-        self.assertEqual(result, [])
-
-    def test_process_settings_catalog_settings_fallback(self):
-        """Test Settings Catalog settings processing falls back to ID manipulation when no displayName."""
-        # Test fallback scenario: no enriched settingDefinitions, just raw settingInstance
-        settings_data = [
-            {
-                "id": "0",
-                "settingInstance": {
-                    "@odata.type": "#microsoft.graph.deviceManagementConfigurationSimpleSettingInstance",
-                    "settingDefinitionId": "device_vendor_msft_policy_config_localpoliciessecurityoptions_interactivelogon_machineinactivitylimit_v2",
-                    "simpleSettingValue": {
-                        "@odata.type": "#microsoft.graph.deviceManagementConfigurationIntegerSettingValue",
-                        "value": 14400
-                    }
-                }
-            }
-        ]
-        
-        result = _process_settings_catalog_settings(settings_data)
-        
-        # Verify fallback processing works
-        self.assertEqual(len(result), 1)
-        # Should extract "machineinactivitylimit_v2" and format it as "Machineinactivitylimit V2"
-        expected_name = "Machineinactivitylimit V2"  # This is what the ID formatting logic should produce
-        self.assertEqual(result[0][0], expected_name)
-        self.assertEqual(result[0][1], "14400")
