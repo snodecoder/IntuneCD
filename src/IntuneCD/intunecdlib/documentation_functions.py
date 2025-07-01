@@ -207,14 +207,6 @@ def _format_value_for_markdown(value):
             return f"```json\n{formatted_json}\n```"
         except Exception:
             pass
-    elif len(value_str) > 100:
-        summary_line = value_str.strip().splitlines()[0] if value_str.strip().splitlines() else value_str.strip()[:80]
-        summary = summary_line if len(summary_line) < 80 else summary_line[:77] + '...'
-        return (
-            f"<details class='description'><summary data-open='Minimize' data-close='{summary}...expand'></summary>\n\n"
-            f"```\n{value_str.strip()}\n```\n\n"
-            f"</details>"
-        )
     return value_str
 
 
