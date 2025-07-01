@@ -138,13 +138,11 @@ class SettingsCatalogBackupModule(BaseBackupModule):
 
         # Retrieve all definitions from Graph and build a map
         definition_map = {}
-        try:
-            # Batch request for all definitionIds
-            batched_definitions = self.make_graph_request(
-                endpoint=f"{self.endpoint}/beta/deviceManagement/configurationSettings",
-                params={"ids": ",".join(all_definition_ids)}
-            )
-            for definition in batched_definitions.get("value", []):
+        for def_id in all_definition_ids:
+            try:
+                definition = self.make_graph_request(
+                    endpoint=f"{self.endpoint}/beta/deviceManagement/configurationSettings/{def_id}"
+                )
                 entry = {
                     "id": definition.get("id", ""),
                     "name": definition.get("name", ""),
@@ -174,16 +172,16 @@ class SettingsCatalogBackupModule(BaseBackupModule):
                     except Exception as e:
                         self.log(
                             tag="warning",
-                            msg=f"Could not retrieve category for {definition['id']}: {e}"
+                            msg=f"Could not retrieve category for {def_id}: {e}"
                         )
                         entry["categoryDisplayName"] = ""
-                definition_map[definition['id']] = entry
-        except Exception as e:
-            self.log(
-                tag="warning",
-                msg=f"Could not retrieve definition for {definition['id']}: {e}"
-            )
-
+                definition_map[def_id] = entry
+            except Exception as e:
+                self.log(
+                    tag="warning",
+                    msg=f"Could not retrieve definition for {def_id}: {e}"
+                )
+                continue
 
         # Add all relevant definitions to each setting
         enriched_settings = []
