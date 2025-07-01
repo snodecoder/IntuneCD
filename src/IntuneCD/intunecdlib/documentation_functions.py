@@ -660,7 +660,7 @@ def document_settings_catalog(
     """
     Specialized documentation function for Settings Catalog policies.
     Creates simplified configuration sections and organized setting tables by category.
-    
+
     :param configpath: Path to backup files
     :param outpath: Base path for Markdown output
     :param header: Configuration type header
@@ -707,7 +707,7 @@ def document_settings_catalog(
 
             # Prepare assignments table
             assignments_table = assignment_table(repo_data)
-            
+
             # Extract basic policy information
             policy_name = repo_data.get("name", "Unknown Policy")
             description = repo_data.get("description", "")
@@ -716,7 +716,7 @@ def document_settings_catalog(
             scope_tags = repo_data.get("roleScopeTagIds", [])
             created_date = repo_data.get("createdDateTime", "")
             modified_date = repo_data.get("lastModifiedDateTime", "")
-            
+
             # Create basic policy info table
             basics_table_data = [
                 ["Name", policy_name],
@@ -726,16 +726,16 @@ def document_settings_catalog(
                 ["Technologies", technologies],
                 ["Scope tags", ", ".join(scope_tags) if scope_tags else "Default"]
             ]
-            
+
             # Add dates if available
             if created_date:
                 basics_table_data.append(["Created", _format_date(created_date)])
             if modified_date:
                 basics_table_data.append(["Last modified", _format_date(modified_date)])
-            
+
             # Remove None entries
             basics_table_data = [item for item in basics_table_data if item is not None]
-            
+
             basics_table = _write_clean_table(["Setting", "Value"], basics_table_data)
 
             # Process settings by category
@@ -767,14 +767,14 @@ def document_settings_catalog(
             # Write to file
             with open(target_md, "a", encoding="utf-8") as md:
                 md.write(top_header + "\n\n")
-                
+
                 if assignments_table:
                     md.write("#### Assignments\n")
                     md.write(str(assignments_table) + "\n\n")
-                
+
                 md.write("#### Basics\n")
                 md.write(str(basics_table) + "\n\n")
-                
+
                 # Write single configuration table
                 if settings_tables:
                     # There should only be one table now
@@ -791,7 +791,7 @@ def _format_platform(platform):
     platform_map = {
         "windows10": "Windows 10 and later",
         "macOS": "macOS",
-        "iOS": "iOS/iPadOS", 
+        "iOS": "iOS/iPadOS",
         "android": "Android"
     }
     return platform_map.get(platform, platform)
@@ -812,22 +812,22 @@ def _process_settings_catalog_settings(settings):
     """
     Process Settings Catalog settings to extract readable names and values.
     This function is used primarily for testing the setting processing logic.
-    
+
     :param settings: List of settings from Settings Catalog policy
     :return: List of [name, value] pairs
     """
     if not settings:
         return []
-    
+
     processed_settings = []
-    
+
     for setting in settings:
         if "settingInstance" not in setting:
             continue
-            
+
         setting_instance = setting["settingInstance"]
         setting_definition_id = setting_instance.get("settingDefinitionId", "")
-        
+
         # Extract display name from enriched data or use fallback formatting
         if "settingDefinitions" in setting and setting["settingDefinitions"]:
             # Use enriched display name if available
@@ -838,10 +838,10 @@ def _process_settings_catalog_settings(settings):
         else:
             # Fallback to formatting the ID - use simple formatting for test compatibility
             name_with_desc = _format_setting_name_for_tests(setting_definition_id)
-        
+
         # Extract value - use simple extraction for test compatibility
         value = _extract_setting_value_for_tests(setting_instance)
-        
+
         # Handle multi-value results from children
         if isinstance(value, list):
             # If there are multiple child values, create separate entries
@@ -850,7 +850,7 @@ def _process_settings_catalog_settings(settings):
                 processed_settings.append([child_name, str(child_value)])
         else:
             processed_settings.append([name_with_desc, str(value)])
-    
+
     return processed_settings
 
 
@@ -858,16 +858,16 @@ def _format_setting_name_for_tests(setting_definition_id):
     """
     Format setting definition ID into a readable name for test compatibility.
     This uses simpler logic than the main formatting function.
-    
+
     :param setting_definition_id: The setting definition ID
     :return: Formatted setting name
     """
     if not setting_definition_id:
         return "Unknown Setting"
-    
+
     # Extract the meaningful part from the ID
     parts = setting_definition_id.split("_")
-    
+
     # Find the last meaningful parts (usually after the category)
     if len(parts) > 3:
         # For test compatibility, take only the last 2 parts
@@ -878,7 +878,7 @@ def _format_setting_name_for_tests(setting_definition_id):
         name = re.sub(r'v(\d+)', r'V\1', name)  # Convert v2 to V2
         name = re.sub(r'([a-z])([A-Z])', r'\1 \2', name)  # Add spaces before capitals
         return name.title()
-    
+
     # Fallback to just converting underscores to spaces and title case
     return setting_definition_id.replace("_", " ").title()
 
@@ -887,7 +887,7 @@ def _extract_setting_value_for_tests(setting_instance):
     """
     Extract the value from a setting instance for test compatibility.
     This uses simpler logic than the main extraction function.
-    
+
     :param setting_instance: The setting instance object
     :return: Setting value
     """
@@ -904,30 +904,30 @@ def _extract_setting_value_for_tests(setting_instance):
         if isinstance(collection, list) and len(collection) > 0:
             return f"{len(collection)} items"
         return "Collection value"
-    
+
     return "Not configured"
 
 
 def _create_settings_tables(settings):
     """
     Create a single table from Settings Catalog settings.
-    
+
     :param settings: List of settings from the policy
     :return: List with single tuple ("Configuration", table)
     """
     if not settings:
         return []
-    
+
     # Collect all settings in a single list
     all_settings = []
-    
+
     for setting in settings:
         if "settingInstance" not in setting:
             continue
-            
+
         setting_instance = setting["settingInstance"]
         setting_definition_id = setting_instance.get("settingDefinitionId", "")
-        
+
         # Extract display name from enriched data or use fallback formatting
         if "settingDefinitions" in setting and setting["settingDefinitions"]:
             # Use enriched display name if available
@@ -937,10 +937,10 @@ def _create_settings_tables(settings):
             # Fallback to formatting the ID
             display_name = _format_setting_name(setting_definition_id)
             description = ""
-        
+
         # Extract value (now handles children properly)
         value = _extract_setting_value(setting_instance)
-        
+
         # Handle multi-value results from children
         if isinstance(value, list):
             # If there are multiple child values, create separate rows
@@ -951,12 +951,12 @@ def _create_settings_tables(settings):
         else:
             formatted_value = _format_value_for_markdown(value)
             all_settings.append([display_name, formatted_value, description])
-    
+
     # Create single table with all settings using clean formatting
     if all_settings:
         table = _write_clean_table(["Setting", "Value", "Description"], all_settings)
         return [("Configuration", table)]
-    
+
     return []
 
 
@@ -975,20 +975,20 @@ def _write_clean_table(headers, data):
 def _format_value_for_markdown(value):
     """
     Format setting value for markdown display, handling XML/JSON structures.
-    
+
     :param value: The setting value to format
     :return: Formatted value string
     """
     if not value or value == "Not configured":
         return value
-    
+
     value_str = str(value)
-    
+
     # Check if this looks like XML content
     if value_str.strip().startswith('<') and value_str.strip().endswith('>'):
         # Format as XML code block
         return f"```xml\n{value_str.strip()}\n```"
-    
+
     # Check if this looks like JSON content
     if (value_str.strip().startswith('{') and value_str.strip().endswith('}')) or \
        (value_str.strip().startswith('[') and value_str.strip().endswith(']')):
@@ -1001,28 +1001,28 @@ def _format_value_for_markdown(value):
         except Exception:
             # If parsing fails, treat as regular text
             pass
-    
+
     # For very long values (> 100 chars), use code block
     if len(value_str) > 100:
         return f"```\n{value_str}\n```"
-    
+
     return value_str
 
 
 def _extract_category_from_id(setting_definition_id):
     """
     Extract category name from setting definition ID.
-    
+
     :param setting_definition_id: The setting definition ID
     :return: Category name
     """
     if not setting_definition_id:
         return "Other Settings"
-    
+
     # Common patterns for extracting categories
     category_patterns = {
         "localpoliciessecurityoptions": "Local Policies Security Options",
-        "defender": "Microsoft Defender", 
+        "defender": "Microsoft Defender",
         "devicelock": "Device Lock",
         "wifi": "Wi-Fi",
         "bluetooth": "Bluetooth",
@@ -1034,15 +1034,15 @@ def _extract_category_from_id(setting_definition_id):
         "accounts": "Accounts",
         "applications": "Applications"
     }
-    
+
     # Convert to lowercase for matching
     id_lower = setting_definition_id.lower()
-    
+
     # Look for category patterns in the ID
     for pattern, category_name in category_patterns.items():
         if pattern in id_lower:
             return category_name
-    
+
     # Fallback: try to extract from policy config pattern
     if "policy_config_" in id_lower:
         # Extract the part after policy_config_
@@ -1051,27 +1051,27 @@ def _extract_category_from_id(setting_definition_id):
             category_part = parts[1].split("_")[0]
             # Convert to title case
             return category_part.replace("", " ").title()
-    
+
     return "Other Settings"
 
 
 def _format_setting_name(setting_definition_id):
     """
     Format setting definition ID into a readable name.
-    
+
     :param setting_definition_id: The setting definition ID
     :return: Formatted setting name
     """
     if not setting_definition_id:
         return "Unknown Setting"
-    
+
     # Special cases for well-known settings
     if "machineinactivitylimit" in setting_definition_id.lower():
         return "Interactive Logon Machine Inactivity Limit"
-    
+
     # Extract the meaningful part from the ID
     parts = setting_definition_id.split("_")
-    
+
     # Find the last meaningful parts (usually after the category)
     if len(parts) > 3:
         # Take the last 2-3 parts and format them
@@ -1082,7 +1082,7 @@ def _format_setting_name(setting_definition_id):
         name = re.sub(r'_v\d+$', '', name)  # Remove version suffix
         name = re.sub(r'([a-z])([A-Z])', r'\1 \2', name)  # Add spaces before capitals
         return name.title()
-    
+
     # Fallback to just converting underscores to spaces and title case
     return setting_definition_id.replace("_", " ").title()
 
@@ -1090,7 +1090,7 @@ def _format_setting_name(setting_definition_id):
 def _extract_setting_value(setting_instance):
     """
     Extract the value from a setting instance, including children values.
-    
+
     :param setting_instance: The setting instance object
     :return: Formatted setting value or list of child values
     """
@@ -1099,7 +1099,7 @@ def _extract_setting_value(setting_instance):
         return value if value != "" else "Not configured"
     elif "choiceSettingValue" in setting_instance:
         choice_value_obj = setting_instance["choiceSettingValue"]
-        
+
         # Check if there are children with actual values
         if "children" in choice_value_obj and choice_value_obj["children"]:
             child_values = []
@@ -1107,11 +1107,11 @@ def _extract_setting_value(setting_instance):
                 child_value = _extract_setting_value(child)
                 if child_value and child_value != "Not configured" and child_value != "":
                     child_values.append(child_value)
-            
+
             # If we found child values, return them; otherwise fall back to choice value
             if child_values:
                 return child_values if len(child_values) > 1 else child_values[0]
-        
+
         # Fallback to choice value
         choice_value = choice_value_obj.get("value", "")
         if choice_value:
@@ -1128,7 +1128,27 @@ def _extract_setting_value(setting_instance):
     elif "groupSettingCollectionValue" in setting_instance:
         collection = setting_instance["groupSettingCollectionValue"]
         if isinstance(collection, list) and len(collection) > 0:
-            return f"{len(collection)} items"
+            extracted = []
+            for item in collection:
+                # If the item has children, extract their values
+                if "children" in item and item["children"]:
+                    child_values = []
+                    for child in item["children"]:
+                        child_value = _extract_setting_value(child)
+                        if child_value and child_value != "Not configured" and child_value != "":
+                            child_values.append(child_value)
+                    if child_values:
+                        # If only one value, don't wrap in list
+                        extracted.append(child_values if len(child_values) > 1 else child_values[0])
+                else:
+                    # Fallback: try to extract value directly
+                    value = item.get("value", None)
+                    if value:
+                        extracted.append(value)
+            # Flatten if only one item
+            if len(extracted) == 1:
+                return extracted[0]
+            return extracted if extracted else "Not configured"
         return "Collection value"
-    
+
     return "Not configured"
