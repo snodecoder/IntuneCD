@@ -97,8 +97,8 @@ class SettingsCatalogBackupModule(BaseBackupModule):
     def _enrich_settings_with_definitions(self, settings: list) -> list:
         """
         Verrijkt settings met alleen de hoofd settingDefinition van elke settingInstance.
-        Slaat deze op onder 'settingDefinitions' in de JSON, met id, name, displayName, description
-        en indien aanwezig de options (itemId, name, value).
+        Slaat deze op onder 'settingDefinitions' in de JSON, met id, name, displayName, description,
+        en indien aanwezig de options (itemId, name, value) en children (id, displayName).
         """
         if not settings:
             return settings
@@ -125,7 +125,6 @@ class SettingsCatalogBackupModule(BaseBackupModule):
                     # Bouw de gewenste structuur
                     definition_entry = {
                         "id": definition.get("id", ""),
-                        "name": definition.get("name", ""),
                         "displayName": definition.get("displayName", ""),
                         "description": definition.get("description", "")
                     }
@@ -135,9 +134,34 @@ class SettingsCatalogBackupModule(BaseBackupModule):
                         for option in definition["options"]:
                             definition_entry["options"].append({
                                 "itemId": option.get("itemId", ""),
-                                "name": option.get("name", ""),
+                                "displayName": option.get("displayName", ""),
                                 "value": option.get("optionValue", {}).get("value", None)
                             })
+                    # Voeg children toe indien aanwezig
+                    child_ids = []
+                    # Microsoft Graph kan verschillende keys gebruiken voor child setting definitions
+                    for key in ["children", "childIds", "childSettingDefinitions"]:
+                        if key in definition and isinstance(definition[key], list):
+                            child_ids = definition[key]
+                            break
+                    children = []
+                    for child_id in child_ids:
+                        try:
+                            child_def = self.make_graph_request(
+                                endpoint=f"{self.endpoint}/beta/deviceManagement/configurationSettings/{child_id}"
+                            )
+                            children.append({
+                                "id": child_def.get("id", ""),
+                                "displayName": child_def.get("displayName", "")
+                            })
+                        except Exception as e:
+                            self.log(
+                                tag="warning",
+                                msg=f"Could not retrieve child definition for {child_id}: {e}"
+                            )
+                            continue
+                    if children:
+                        definition_entry["children"] = children
                     definition_map[def_id] = definition_entry
                 except Exception as e:
                     self.log(
