@@ -899,10 +899,7 @@ def _extract_setting_value_for_tests(setting_instance):
 
 def _create_settings_tables(settings):
     """
-    Create a single table from Settings Catalog settings, using settingDefinitions for all (child) settings.
-
-    :param settings: List of settings from the policy
-    :return: List with single tuple ("Configuration", table)
+    Create a settings table grouped and sorted by categoryDisplayName, with a visually distinctive row for each category.
     """
     if not settings:
         return []
@@ -917,35 +914,78 @@ def _create_settings_tables(settings):
 
     definitions_lookup = build_definitions_lookup(settings)
 
-    all_settings = []
+    # Group settings by categoryDisplayName
+    category_map = {}
+    for setting in settings:
+        # Get the main definition for this setting
+        main_def = setting.get("settingDefinitions", [{}])[0]
+        category = main_def.get("categoryDisplayName", "Other Settings")
+        if category not in category_map:
+            category_map[category] = []
+        parent_definitions = {d["id"]: d for d in setting.get("settingDefinitions", [])}
+        setting_instance = setting.get("settingInstance")
+        if setting_instance:
+            # Use your existing extract_setting logic
+            rows = _extract_setting_rows_for_category(setting_instance, parent_definitions, definitions_lookup)
+            category_map[category].extend(rows)
 
+    # Sort categories alphabetically
+    sorted_categories = sorted(category_map.keys(), key=lambda x: x.lower())
+
+    # Build the table rows with category headers
+    table_rows = []
+    for category in sorted_categories:
+        # Add a visually distinctive row for the category
+        table_rows.append([
+            f"<tr style='background-color:#e0e0e0;font-weight:bold;'><td colspan='3'>{category}</td></tr>"
+        ])
+        # Add all settings for this category
+        table_rows.extend(category_map[category])
+
+    # Flatten rows for html_table (skip the header row from html_table, as we add our own)
+    headers = ["Setting", "Value", "Description"]
+    # html_table expects rows as lists, but our category row is a raw HTML string, so we need to handle this
+    def custom_html_table(headers, rows):
+        table = "<table>\n<thead><tr>"
+        for h in headers:
+            table += f"<th>{h}</th>"
+        table += "</tr></thead>\n<tbody>\n"
+        for row in rows:
+            if isinstance(row, str) or (isinstance(row, list) and len(row) == 1 and row[0].startswith("<tr")):
+                # Raw HTML row (category header)
+                table += row[0] if isinstance(row, list) else row
+            else:
+                table += "<tr>" + "".join(f"<td>{cell}</td>" for cell in row) + "</tr>\n"
+        table += "</tbody>\n</table>"
+        return table
+
+    table = custom_html_table(headers, table_rows)
+    return [("Configuration", table)]
+
+def _extract_setting_rows_for_category(setting_instance, parent_definitions, definitions_lookup):
+    """
+    Recursively extract setting rows for a category.
+    """
+    # Use your existing extract_setting logic, but return a list of [Setting, Value, Description] rows.
     def extract_setting(setting_instance, parent_definitions):
-        """
-        Recursively extract settings and their children, matching with definitions.
-        """
         setting_definition_id = setting_instance.get("settingDefinitionId", "")
-        # Try to find the definition in parent_definitions first, then global lookup
         definition = parent_definitions.get(setting_definition_id) or definitions_lookup.get(setting_definition_id, {})
         display_name = definition.get("displayName", _format_setting_name(setting_definition_id))
         description = definition.get("description", "")
-        # Collapse multiple newlines to a single newline, then trim trailing spaces/tabs
         if isinstance(description, str):
             description = re.sub(r'((\r\n|\r|\n){2,})', r'\r\n', description)
             description = description.rstrip(' \t')
-            # If description is too long, show summary and details
             if len(description) > 60:
                 description = (
                     f"<details><summary>...expand...</summary>"
                     f"{description}</details>"
                 )
 
-        # Handle simple value
         if "simpleSettingValue" in setting_instance:
             value = setting_instance["simpleSettingValue"].get("value", "")
             formatted_value = _format_value_for_markdown(value if value != "" else "Not configured")
             return [[display_name, formatted_value, description]]
 
-        # Handle simple setting collection value
         elif "simpleSettingCollectionValue" in setting_instance:
             collection = setting_instance["simpleSettingCollectionValue"]
             if isinstance(collection, list) and collection:
@@ -959,12 +999,10 @@ def _create_settings_tables(settings):
             else:
                 return [[display_name, "Not configured", description]]
 
-        # Handle choice value (with possible children)
         elif "choiceSettingValue" in setting_instance:
             choice_value_obj = setting_instance["choiceSettingValue"]
             value = choice_value_obj.get("value", "")
             children = choice_value_obj.get("children", [])
-            # --- NEW LOGIC: Lookup displayName for selected option ---
             option_display_name = None
             if value and "options" in definition:
                 for option in definition["options"]:
@@ -974,39 +1012,23 @@ def _create_settings_tables(settings):
             formatted_value = _format_value_for_markdown(option_display_name if option_display_name else (value if value else "Not configured"))
             rows = []
             rows.append([display_name, formatted_value, description])
-            # Add children rows, if any
             for child in children:
                 rows.extend(extract_setting(child, parent_definitions))
             return rows
 
-        # Handle group collection value (with possible children)
         elif "groupSettingCollectionValue" in setting_instance:
             collection = setting_instance["groupSettingCollectionValue"]
             rows = []
             if isinstance(collection, list):
                 for item in collection:
-                    # Each item may have children
                     children = item.get("children", [])
                     for child in children:
                         rows.extend(extract_setting(child, parent_definitions))
             return rows if rows else [[display_name, "Collection value", description]]
 
-        # Fallback
         return [[display_name, "Not configured", description]]
 
-    # For each top-level setting, build a definitions lookup for its children
-    for setting in settings:
-        parent_definitions = {d["id"]: d for d in setting.get("settingDefinitions", [])}
-        setting_instance = setting.get("settingInstance")
-        if setting_instance:
-            all_settings.extend(extract_setting(setting_instance, parent_definitions))
-
-    # Create single table with all settings using clean formatting
-    if all_settings:
-        table = _write_clean_table(["Setting", "Value", "Description"], all_settings)
-        return [("Configuration", table)]
-
-    return []
+    return extract_setting(setting_instance, parent_definitions)
 
 def _write_clean_table(headers, data):
     """
