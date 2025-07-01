@@ -96,109 +96,73 @@ class SettingsCatalogBackupModule(BaseBackupModule):
 
     def _enrich_settings_with_definitions(self, settings: list) -> list:
         """
-        Enrich settings with display names and descriptions from setting definitions,
-        including all nested children.
+        Verrijkt settings met alleen de hoofd settingDefinition van elke settingInstance.
+        Slaat deze op onder 'settingDefinitions' in de JSON, met id, name, displayName, description
+        en indien aanwezig de options (itemId, name, value).
         """
         if not settings:
             return settings
 
-        # Recursively collect all settingDefinitionIds from a settingInstance and its children
-        def collect_definition_ids(instance):
-            ids = set()
-            if isinstance(instance, dict):
-                if "settingDefinitionId" in instance:
-                    ids.add(instance["settingDefinitionId"])
-                # Check for children in all possible value containers
-                for key in ["children", "choiceSettingValue", "simpleSettingValue", "groupSettingCollectionValue"]:
-                    if key in instance:
-                        value = instance[key]
-                        if isinstance(value, list):
-                            for child in value:
-                                ids.update(collect_definition_ids(child))
-                        elif isinstance(value, dict):
-                            ids.update(collect_definition_ids(value))
-            elif isinstance(instance, list):
-                for item in instance:
-                    ids.update(collect_definition_ids(item))
-            return ids
-
-        # Gather all unique definition IDs from all settings (including nested)
+        # Verzamel alleen de hoofd settingDefinitionIds
         definition_ids = set()
         for setting in settings:
-            if "settingInstance" in setting:
-                definition_ids.update(collect_definition_ids(setting["settingInstance"]))
+            if "settingInstance" in setting and isinstance(setting["settingInstance"], dict):
+                def_id = setting["settingInstance"].get("settingDefinitionId")
+                if def_id:
+                    definition_ids.add(def_id)
 
         if not definition_ids:
             return settings
 
+        # Haal alle hoofd settingDefinitions op via Graph
+        definition_map = {}
         try:
-            definition_ids_list = list(definition_ids)
-            definition_responses = []
-            for i in range(0, len(definition_ids_list), 20):
-                batch_ids = definition_ids_list[i:i+20]
-                for def_id in batch_ids:
-                    try:
-                        definition_response = self.make_graph_request(
-                            endpoint=f"{self.endpoint}/beta/deviceManagement/configurationSettings/{def_id}"
-                        )
-                        definition_responses.append(definition_response)
-                    except Exception as e:
-                        self.log(
-                            tag="warning",
-                            msg=f"Could not retrieve definition for {def_id}: {e}"
-                        )
-                        continue
-
-            # Map definition ID to display name and description
-            definition_map = {}
-            for definition in definition_responses:
-                if "id" in definition:
-                    definition_map[definition["id"]] = {
+            for def_id in definition_ids:
+                try:
+                    definition = self.make_graph_request(
+                        endpoint=f"{self.endpoint}/beta/deviceManagement/configurationSettings/{def_id}"
+                    )
+                    # Bouw de gewenste structuur
+                    definition_entry = {
+                        "id": definition.get("id", ""),
+                        "name": definition.get("name", ""),
                         "displayName": definition.get("displayName", ""),
                         "description": definition.get("description", "")
                     }
-
-            # Recursively build settingDefinitions for a settingInstance and its children
-            def build_setting_definitions(instance, seen=None):
-                if seen is None:
-                    seen = set()
-                defs = []
-                if isinstance(instance, dict):
-                    def_id = instance.get("settingDefinitionId")
-                    if def_id and def_id in definition_map and def_id not in seen:
-                        defs.append({
-                            "id": def_id,
-                            "displayName": definition_map[def_id]["displayName"],
-                            "description": definition_map[def_id]["description"]
-                        })
-                        seen.add(def_id)
-                    # Check for children in all possible value containers
-                    for key in ["children", "choiceSettingValue", "simpleSettingValue", "groupSettingCollectionValue"]:
-                        if key in instance:
-                            value = instance[key]
-                            if isinstance(value, list):
-                                for child in value:
-                                    defs.extend(build_setting_definitions(child, seen))
-                            elif isinstance(value, dict):
-                                defs.extend(build_setting_definitions(value, seen))
-                elif isinstance(instance, list):
-                    for item in instance:
-                        defs.extend(build_setting_definitions(item, seen))
-                return defs
-
-            enriched_settings = []
-            for setting in settings:
-                enriched_setting = setting.copy()
-                if "settingInstance" in setting:
-                    # Use a set to avoid duplicate definitions
-                    enriched_setting["settingDefinitions"] = build_setting_definitions(setting["settingInstance"])
-                enriched_settings.append(enriched_setting)
-
-            return enriched_settings
-
+                    # Voeg options toe indien aanwezig
+                    if "options" in definition and isinstance(definition["options"], list):
+                        definition_entry["options"] = []
+                        for option in definition["options"]:
+                            definition_entry["options"].append({
+                                "itemId": option.get("itemId", ""),
+                                "name": option.get("name", ""),
+                                "value": option.get("optionValue", {}).get("value", None)
+                            })
+                    definition_map[def_id] = definition_entry
+                except Exception as e:
+                    self.log(
+                        tag="warning",
+                        msg=f"Could not retrieve definition for {def_id}: {e}"
+                    )
+                    continue
         except Exception as e:
             self.log(
                 tag="warning",
                 msg=f"Error enriching settings with definitions: {e}"
             )
             return settings
+
+        # Voeg de settingDefinitions toe aan elke setting (alleen hoofd settingDefinitionId)
+        enriched_settings = []
+        for setting in settings:
+            enriched_setting = setting.copy()
+            def_id = None
+            if "settingInstance" in setting and isinstance(setting["settingInstance"], dict):
+                def_id = setting["settingInstance"].get("settingDefinitionId")
+            if def_id and def_id in definition_map:
+                enriched_setting["settingDefinitions"] = [definition_map[def_id]]
+            else:
+                enriched_setting["settingDefinitions"] = []
+            enriched_settings.append(enriched_setting)
+
+        return enriched_settings
