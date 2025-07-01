@@ -211,9 +211,9 @@ def _format_value_for_markdown(value):
         summary_line = value_str.strip().splitlines()[0] if value_str.strip().splitlines() else value_str.strip()[:80]
         summary = summary_line if len(summary_line) < 80 else summary_line[:77] + '...'
         return (
-            f"<td class='property-column2'><details class='description'><summary data-open='Minimize' data-close='{summary}...expand'></summary>\n\n"
+            f"<details class='description'><summary data-open='Minimize' data-close='{summary}...expand'></summary>\n\n"
             f"```\n{value_str.strip()}\n```\n\n"
-            f"</details></td>"
+            f"</details>"
         )
     return value_str
 
@@ -972,43 +972,6 @@ def _write_clean_table(headers, data):
     return html_table(headers, data)
 
 
-def _format_value_for_markdown(value):
-    """
-    Format setting value for markdown display, handling XML/JSON structures.
-
-    :param value: The setting value to format
-    :return: Formatted value string
-    """
-    if not value or value == "Not configured":
-        return value
-
-    value_str = str(value)
-
-    # Check if this looks like XML content
-    if value_str.strip().startswith('<') and value_str.strip().endswith('>'):
-        # Format as XML code block
-        return f"```xml\n{value_str.strip()}\n```"
-
-    # Check if this looks like JSON content
-    if (value_str.strip().startswith('{') and value_str.strip().endswith('}')) or \
-       (value_str.strip().startswith('[') and value_str.strip().endswith(']')):
-        try:
-            import json
-            # Try to parse and pretty-format JSON
-            parsed = json.loads(value_str)
-            formatted_json = json.dumps(parsed, indent=2)
-            return f"```json\n{formatted_json}\n```"
-        except Exception:
-            # If parsing fails, treat as regular text
-            pass
-
-    # For very long values (> 100 chars), use code block
-    if len(value_str) > 100:
-        return f"```\n{value_str}\n```"
-
-    return value_str
-
-
 def _extract_category_from_id(setting_definition_id):
     """
     Extract category name from setting definition ID.
@@ -1099,38 +1062,35 @@ def _extract_setting_value(setting_instance):
         return value if value != "" else "Not configured"
     elif "choiceSettingValue" in setting_instance:
         choice_value_obj = setting_instance["choiceSettingValue"]
-
-        # Check if there are children with actual values
-        if "children" in choice_value_obj and choice_value_obj["children"]:
-            child_values = []
-            for child in choice_value_obj["children"]:
-                child_value = _extract_setting_value(child)
-                if child_value and child_value != "Not configured" and child_value != "":
-                    child_values.append(child_value)
-
-            # If we found child values, return them; otherwise fall back to choice value
-            if child_values:
-                return child_values if len(child_values) > 1 else child_values[0]
-
-        # Fallback to choice value
+        results = []
+        # Always add the main choice value first
         choice_value = choice_value_obj.get("value", "")
         if choice_value:
-            # Try to extract meaningful part from choice value
+            # Extract meaningful part if possible
             if "_" in choice_value:
                 parts = choice_value.split("_")
                 if len(parts) > 1:
                     meaningful_part = parts[-1]
-                    # Return the meaningful part, but only if it's not just "selected"
                     if meaningful_part.lower() not in ["selected", "enabled", "disabled"]:
-                        return meaningful_part.title()
-            return choice_value
-        return "Not configured"
+                        results.append(meaningful_part.title())
+                    else:
+                        results.append(choice_value)
+                else:
+                    results.append(choice_value)
+            else:
+                results.append(choice_value)
+        # Add children values if present
+        if "children" in choice_value_obj and choice_value_obj["children"]:
+            for child in choice_value_obj["children"]:
+                child_value = _extract_setting_value(child)
+                if child_value and child_value != "Not configured" and child_value != "":
+                    results.append(child_value)
+        return results if results else "Not configured"
     elif "groupSettingCollectionValue" in setting_instance:
         collection = setting_instance["groupSettingCollectionValue"]
         if isinstance(collection, list) and len(collection) > 0:
             extracted = []
             for item in collection:
-                # If the item has children, extract their values
                 if "children" in item and item["children"]:
                     child_values = []
                     for child in item["children"]:
@@ -1138,14 +1098,11 @@ def _extract_setting_value(setting_instance):
                         if child_value and child_value != "Not configured" and child_value != "":
                             child_values.append(child_value)
                     if child_values:
-                        # If only one value, don't wrap in list
                         extracted.append(child_values if len(child_values) > 1 else child_values[0])
                 else:
-                    # Fallback: try to extract value directly
                     value = item.get("value", None)
                     if value:
                         extracted.append(value)
-            # Flatten if only one item
             if len(extracted) == 1:
                 return extracted[0]
             return extracted if extracted else "Not configured"
