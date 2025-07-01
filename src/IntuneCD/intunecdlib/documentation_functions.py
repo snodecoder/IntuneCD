@@ -910,7 +910,7 @@ def _extract_setting_value_for_tests(setting_instance):
 
 def _create_settings_tables(settings):
     """
-    Create a single table from Settings Catalog settings.
+    Create a single table from Settings Catalog settings, using settingDefinitions for all (child) settings.
 
     :param settings: List of settings from the policy
     :return: List with single tuple ("Configuration", table)
@@ -918,39 +918,69 @@ def _create_settings_tables(settings):
     if not settings:
         return []
 
-    # Collect all settings in a single list
+    # Build a lookup for all definitions by id for fast access
+    def build_definitions_lookup(settings):
+        lookup = {}
+        for setting in settings:
+            for definition in setting.get("settingDefinitions", []):
+                lookup[definition["id"]] = definition
+        return lookup
+
+    definitions_lookup = build_definitions_lookup(settings)
+
     all_settings = []
 
-    for setting in settings:
-        if "settingInstance" not in setting:
-            continue
-
-        setting_instance = setting["settingInstance"]
+    def extract_setting(setting_instance, parent_definitions):
+        """
+        Recursively extract settings and their children, matching with definitions.
+        """
         setting_definition_id = setting_instance.get("settingDefinitionId", "")
+        # Try to find the definition in parent_definitions first, then global lookup
+        definition = parent_definitions.get(setting_definition_id) or definitions_lookup.get(setting_definition_id, {})
+        display_name = definition.get("displayName", _format_setting_name(setting_definition_id))
+        description = definition.get("description", "")
 
-        # Extract display name from enriched data or use fallback formatting
-        if "settingDefinitions" in setting and setting["settingDefinitions"]:
-            # Use enriched display name if available
-            display_name = setting["settingDefinitions"][0].get("displayName", "")
-            description = setting["settingDefinitions"][0].get("description", "")
-        else:
-            # Fallback to formatting the ID
-            display_name = _format_setting_name(setting_definition_id)
-            description = ""
+        # Handle simple value
+        if "simpleSettingValue" in setting_instance:
+            value = setting_instance["simpleSettingValue"].get("value", "")
+            formatted_value = _format_value_for_markdown(value if value != "" else "Not configured")
+            return [[display_name, formatted_value, description]]
 
-        # Extract value (now handles children properly)
-        value = _extract_setting_value(setting_instance)
+        # Handle choice value (with possible children)
+        elif "choiceSettingValue" in setting_instance:
+            choice_value_obj = setting_instance["choiceSettingValue"]
+            value = choice_value_obj.get("value", "")
+            children = choice_value_obj.get("children", [])
+            rows = []
+            # Add the main choice value row
+            formatted_value = _format_value_for_markdown(value if value else "Not configured")
+            rows.append([display_name, formatted_value, description])
+            # Add children rows, if any
+            for child in children:
+                rows.extend(extract_setting(child, parent_definitions))
+            return rows
 
-        # Handle multi-value results from children
-        if isinstance(value, list):
-            # If there are multiple child values, create separate rows
-            for i, child_value in enumerate(value):
-                child_name = f"{display_name} ({i+1})" if len(value) > 1 else display_name
-                formatted_value = _format_value_for_markdown(child_value)
-                all_settings.append([child_name, formatted_value, description if i == 0 else ""])
-        else:
-            formatted_value = _format_value_for_markdown(value)
-            all_settings.append([display_name, formatted_value, description])
+        # Handle group collection value (with possible children)
+        elif "groupSettingCollectionValue" in setting_instance:
+            collection = setting_instance["groupSettingCollectionValue"]
+            rows = []
+            if isinstance(collection, list):
+                for item in collection:
+                    # Each item may have children
+                    children = item.get("children", [])
+                    for child in children:
+                        rows.extend(extract_setting(child, parent_definitions))
+            return rows if rows else [[display_name, "Collection value", description]]
+
+        # Fallback
+        return [[display_name, "Not configured", description]]
+
+    # For each top-level setting, build a definitions lookup for its children
+    for setting in settings:
+        parent_definitions = {d["id"]: d for d in setting.get("settingDefinitions", [])}
+        setting_instance = setting.get("settingInstance")
+        if setting_instance:
+            all_settings.extend(extract_setting(setting_instance, parent_definitions))
 
     # Create single table with all settings using clean formatting
     if all_settings:
