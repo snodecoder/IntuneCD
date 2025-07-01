@@ -174,15 +174,14 @@ class SettingsCatalogBackupModule(BaseBackupModule):
                     except Exception as e:
                         self.log(
                             tag="warning",
-                            msg=f"Could not retrieve category for {definition}: {e}"
+                            msg=f"Could not retrieve category for {definition['id']}: {e}"
                         )
                         entry["categoryDisplayName"] = ""
-                definition_map[definition] = entry
+                definition_map[definition['id']] = entry
         except Exception as e:
             self.log(
                 tag="warning",
-                msg=f"Could not retrieve definition for {definition}: {e}"
-                continue
+                msg=f"Could not retrieve definition for {definition['id']}: {e}"
             )
 
 
