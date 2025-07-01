@@ -895,7 +895,10 @@ def _extract_setting_rows_for_category(setting_instance, parent_definitions, def
                     val = item.get("value", "")
                     if val != "":
                         values.append(str(val))
-                formatted_value = _format_value_for_markdown("\n\n```\n".join(values).join("\n```\n\n") if values else "Not configured")
+                if values:
+                    formatted_value = _format_value_for_markdown(f"\n```\n" + "\n".join(values) + "\n```\n")
+                else:
+                    formatted_value = _format_value_for_markdown("Not configured")
                 return [[display_name, formatted_value, description]]
             else:
                 return [[display_name, "Not configured", description]]
