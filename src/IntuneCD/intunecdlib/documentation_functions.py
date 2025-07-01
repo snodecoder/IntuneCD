@@ -951,9 +951,15 @@ def _create_settings_tables(settings):
             choice_value_obj = setting_instance["choiceSettingValue"]
             value = choice_value_obj.get("value", "")
             children = choice_value_obj.get("children", [])
+            # --- NEW LOGIC: Lookup displayName for selected option ---
+            option_display_name = None
+            if value and "options" in definition:
+                for option in definition["options"]:
+                    if option.get("value") == value or option.get("itemId") == value:
+                        option_display_name = option.get("displayName") or option.get("name")
+                        break
+            formatted_value = _format_value_for_markdown(option_display_name if option_display_name else (value if value else "Not configured"))
             rows = []
-            # Add the main choice value row
-            formatted_value = _format_value_for_markdown(value if value else "Not configured")
             rows.append([display_name, formatted_value, description])
             # Add children rows, if any
             for child in children:
@@ -988,7 +994,6 @@ def _create_settings_tables(settings):
         return [("Configuration", table)]
 
     return []
-
 
 def _write_clean_table(headers, data):
     """
