@@ -935,6 +935,13 @@ def _create_settings_tables(settings):
         if isinstance(description, str):
             description = re.sub(r'((\r\n|\r|\n){2,})', r'\r\n', description)
             description = description.rstrip(' \t')
+            # If description is too long, show summary and details
+            if len(description) > 180:
+                summary = description[:180].replace('\r', ' ').replace('\n', ' ') + "...expand"
+                description = (
+                    f"<details><summary>{summary}</summary>"
+                    f"{description}</details>"
+                )
 
         # Handle simple value
         if "simpleSettingValue" in setting_instance:
