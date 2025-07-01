@@ -211,9 +211,9 @@ def _format_value_for_markdown(value):
         summary_line = value_str.strip().splitlines()[0] if value_str.strip().splitlines() else value_str.strip()[:80]
         summary = summary_line if len(summary_line) < 80 else summary_line[:77] + '...'
         return (
-            f"<td class='property-column2'><details class='description'><summary data-open='Minimize' data-close='{summary}...expand'></summary>\n\n"
+            f"<details class='description'><summary data-open='Minimize' data-close='{summary}...expand'></summary>\n\n"
             f"```\n{value_str.strip()}\n```\n\n"
-            f"</details></td>"
+            f"</details>"
         )
     return value_str
 
@@ -970,43 +970,6 @@ def _write_clean_table(headers, data):
     if not data:
         return ""
     return html_table(headers, data)
-
-
-def _format_value_for_markdown(value):
-    """
-    Format setting value for markdown display, handling XML/JSON structures.
-
-    :param value: The setting value to format
-    :return: Formatted value string
-    """
-    if not value or value == "Not configured":
-        return value
-
-    value_str = str(value)
-
-    # Check if this looks like XML content
-    if value_str.strip().startswith('<') and value_str.strip().endswith('>'):
-        # Format as XML code block
-        return f"```xml\n{value_str.strip()}\n```"
-
-    # Check if this looks like JSON content
-    if (value_str.strip().startswith('{') and value_str.strip().endswith('}')) or \
-       (value_str.strip().startswith('[') and value_str.strip().endswith(']')):
-        try:
-            import json
-            # Try to parse and pretty-format JSON
-            parsed = json.loads(value_str)
-            formatted_json = json.dumps(parsed, indent=2)
-            return f"```json\n{formatted_json}\n```"
-        except Exception:
-            # If parsing fails, treat as regular text
-            pass
-
-    # For very long values (> 100 chars), use code block
-    if len(value_str) > 100:
-        return f"```\n{value_str}\n```"
-
-    return value_str
 
 
 def _extract_category_from_id(setting_definition_id):
