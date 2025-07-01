@@ -138,11 +138,13 @@ class SettingsCatalogBackupModule(BaseBackupModule):
 
         # Retrieve all definitions from Graph and build a map
         definition_map = {}
-        for def_id in all_definition_ids:
-            try:
-                definition = self.make_graph_request(
-                    endpoint=f"{self.endpoint}/beta/deviceManagement/configurationSettings/{def_id}"
-                )
+        try:
+            # Batch request for all definitionIds
+            batched_definitions = self.make_graph_request(
+                endpoint=f"{self.endpoint}/beta/deviceManagement/configurationSettings",
+                params={"ids": ",".join(all_definition_ids)}
+            )
+            for definition in batched_definitions.get("value", []):
                 entry = {
                     "id": definition.get("id", ""),
                     "name": definition.get("name", ""),
