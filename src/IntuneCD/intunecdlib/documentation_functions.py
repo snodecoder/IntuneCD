@@ -69,13 +69,6 @@ def escape_markdown(text):
     return parse
 
 
-def _replace_newlines_with_br(text):
-    if isinstance(text, str):
-        # Replace all \r\n, \n, or \r with <br>
-        text = re.sub(r'(\r\n|\r|\n)', '<br>', text)
-    return text
-
-
 def assignment_table(data):
     """
     This function creates the HTML assignments table.
@@ -862,7 +855,7 @@ def _create_settings_tables(settings):
                 # Raw HTML row (category header)
                 table += row[0] if isinstance(row, list) else row
             else:
-                table += "<tr>" + "".join(f"<td>{_replace_newlines_with_br(cell)}</td>" for cell in row) + "</tr>\n"
+                table += "<tr>" + "".join(f"<td>{cell}</td>" for cell in row) + "</tr>\n"
         table += "</tbody>\n</table>"
         return table
 
