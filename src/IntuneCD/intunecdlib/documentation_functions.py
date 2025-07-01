@@ -939,6 +939,10 @@ def _create_settings_tables(settings):
         definition = parent_definitions.get(setting_definition_id) or definitions_lookup.get(setting_definition_id, {})
         display_name = definition.get("displayName", _format_setting_name(setting_definition_id))
         description = definition.get("description", "")
+        # Collapse multiple newlines to a single newline, then trim trailing spaces/tabs
+        if isinstance(description, str):
+            description = re.sub(r'((\r\n|\r|\n){2,})', r'\n', description)
+            description = description.rstrip(' \t')
 
         # Handle simple value
         if "simpleSettingValue" in setting_instance:
