@@ -294,7 +294,7 @@ def clean_list(data, decode):
             s = decode_base64(s)
         s = _format_value_for_markdown(s)
         if  len(s) > 200 and not s.startswith('<details'):
-            string = f"<details><summary>Click to expand...</summary>{s}</details>"
+            string = f"<details>{s}</details>"
         else:
             string = s
 
@@ -883,8 +883,7 @@ def _extract_setting_rows_for_category(setting_instance, parent_definitions, def
             description = description.rstrip(' \t')
             if len(description) > 60:
                 description = (
-                    f"<details><summary>...expand...</summary>"
-                    f"{description}</details>"
+                    f"<details>{description}\n</details>"
                 )
 
         if "simpleSettingValue" in setting_instance:
