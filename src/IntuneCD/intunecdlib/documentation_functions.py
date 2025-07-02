@@ -178,104 +178,38 @@ def decode_base64(data):
 
 def _format_value_for_markdown(value):
     """
-    Format setting value for markdown display, handling XML/JSON structures (nested in text or by itself), handling decoded base64 strings, handling long values and ensuring it is suitable for display in a Markdown document.
-    Wrap in <details> block with code block, or return as plain text if not structured.
+    Format setting value for markdown display, handling XML/JSON structures.
+    If XML, wrap in <details> block with summary and code block.
     :param value: The setting value to format
     :return: Formatted value string
     """
     if not value or value == "Not configured":
         return value
 
-    return_str = ""
-    raw_str = str(value)
+    value_str = str(value)
 
-    # If the value contains XML or JSON, wrap it in a <details> code block
-    if ("<" in raw_str and ">" in raw_str) or \
-       ("{" in raw_str and "}" in raw_str) or \
-       ("[" in raw_str and "]" in raw_str):
-
-        value_str = ""  # Initialize value_str to avoid UnboundLocalError
-        after_str = ""  # Initialize after_str to avoid UnboundLocalError
-
-        # Find first and last positions for < > { } [ ]
-        firsts = {
-            "xml": raw_str.find("<"),
-            "json_obj": raw_str.find("{"),
-            "json_arr": raw_str.find("["),
-        }
-        lasts = {
-            "xml": raw_str.rfind(">"),
-            "json_obj": raw_str.rfind("}"),
-            "json_arr": raw_str.rfind("]"),
-        }
-        # Only consider if both first and last are found and in correct order
-        candidates = []
-        for typ in ["xml", "json_obj", "json_arr"]:
-            if firsts[typ] != -1 and lasts[typ] != -1 and firsts[typ] < lasts[typ]:
-                candidates.append((firsts[typ], lasts[typ], typ))
-        if candidates:
-            # Pick the type with the earliest first and latest last
-            selected = min(candidates, key=lambda x: (x[0], -x[1]))
-            first, last, typ = selected
-            return_str += raw_str[:first]
-            value_str = raw_str[first:last+1]
-            after_str = raw_str[last+1:]
-
-    if not value_str:
-        value_str = raw_str
-
-    # Handle XML
+    # Check if this looks like XML content
     if value_str.strip().startswith('<') and value_str.strip().endswith('>'):
-        return_str += (
+        return (
             f"<details>\n\n"
             f"```xml\n{value_str.strip()}\n```\n\n"
             f"</details>"
         )
-    # Handle JSON pretty print
+    # JSON pretty print (optional, keep as is)
     elif (value_str.strip().startswith('{') and value_str.strip().endswith('}')) or \
        (value_str.strip().startswith('[') and value_str.strip().endswith(']')):
         try:
             import json
-            parsed = json.loads(value_str)
+            parsed = json.loads(value_str.strip())
             formatted_json = json.dumps(parsed, indent=2)
-            return_str += (
+            return (
                 f"<details>\n\n"
                 f"```json\n{formatted_json}\n```\n\n"
                 f"</details>"
             )
         except Exception:
-            return_str += (
-                f"<details>\n\n"
-                f"```text\n{value_str.str}\n```\n\n"
-                f"</details>"
-            )
-    # Handle base64 encoded strings
-    elif is_base64(value_str):
-        try:
-            decoded_value = decode_base64(value_str)
-            return_str += (
-                f"<details>\n\n"
-                f"```text\n{decoded_value}\n```\n\n"
-                f"</details>"
-            )
-        except ValueError:
-            return_str += escape_markdown(value_str)
-    # If it's a simple string, escape it for markdown
-    else:
-        return_str += escape_markdown(value_str)
-
-    # Rejoin the parts if they were split
-    if after_str:
-        return_str += after_str
-
-    # Handle long strings by allowing users to expand and view the content only when needed.
-    if not return_str.startswith('<details') and len(return_str) > 200:
-        return_str += (
-            f"<details>\n\n"
-            f"```text\n{value_str}\n```\n\n"
-            f"</details>"
-        )
-    return return_str
+            pass
+    return value_str
 
 
 def clean_list(data, decode):
@@ -355,6 +289,17 @@ def clean_list(data, decode):
 
         return string
 
+    def string(s) -> str:
+        if decode and is_base64(s):
+            s = decode_base64(s)
+        s = _format_value_for_markdown(s)
+        if  len(s) > 200 and not s.startswith('<details'):
+            string = f"<details><summary>Click to expand...</summary>{s}</details>"
+        else:
+            string = s
+
+        return string
+
     values = []
 
     for item in data:
@@ -363,7 +308,7 @@ def clean_list(data, decode):
         elif isinstance(item, dict):
             values.append(dict_to_ul(item))
         elif isinstance(item, str):
-            values.append(_format_value_for_markdown(item))
+            values.append(string(item))
         elif isinstance(item, (bool, int)):
             values.append(item)
         else:
@@ -938,15 +883,13 @@ def _extract_setting_rows_for_category(setting_instance, parent_definitions, def
             description = description.rstrip(' \t')
             if len(description) > 60:
                 description = (
-                    f"<details>{description}</details>"
+                    f"<details><summary>...expand...</summary>"
+                    f"{description}</details>"
                 )
 
         if "simpleSettingValue" in setting_instance:
             value = setting_instance["simpleSettingValue"].get("value", "")
-            if value != "":
-                formatted_value = _format_value_for_markdown(value)
-            else:
-                formatted_value = _format_value_for_markdown("Not configured")
+            formatted_value = _format_value_for_markdown(value if value != "" else "Not configured")
             return [[display_name, formatted_value, description]]
 
         elif "simpleSettingCollectionValue" in setting_instance:
@@ -958,8 +901,7 @@ def _extract_setting_rows_for_category(setting_instance, parent_definitions, def
                     if val != "":
                         values.append(str(val))
                 if values:
-                    # formatted_value = _format_value_for_markdown(f"\n\n```\n" + "\n".join(values) + "\n```\n")
-                    formatted_value = _format_value_for_markdown(values)
+                    formatted_value = _format_value_for_markdown(f"\n\n```\n" + "\n".join(values) + "\n```\n")
                 else:
                     formatted_value = _format_value_for_markdown("Not configured")
                 return [[display_name, formatted_value, description]]
@@ -976,12 +918,7 @@ def _extract_setting_rows_for_category(setting_instance, parent_definitions, def
                     if option.get("value") == value or option.get("itemId") == value:
                         option_display_name = option.get("displayName") or option.get("name")
                         break
-            if option_display_name:
-                formatted_value = _format_value_for_markdown(option_display_name)
-            elif value:
-                formatted_value = _format_value_for_markdown(value)
-            else:
-                formatted_value = _format_value_for_markdown("Not configured")
+            formatted_value = _format_value_for_markdown(option_display_name if option_display_name else (value if value else "Not configured"))
             rows = []
             rows.append([display_name, formatted_value, description])
             for child in children:
