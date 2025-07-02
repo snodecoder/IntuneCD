@@ -184,7 +184,12 @@ def decode_base64(data):
     """
 
     try:
-        return base64.b64decode(data).decode("utf-8")
+        decoded_data = base64.b64decode(data).decode("utf-8")
+        return (
+            f"<details>\n\n"
+            f"```text\n{decoded_data}\n```\n\n"
+            f"</details>"
+        )
     except (base64.binascii.Error, UnicodeDecodeError):
         raise ValueError("Unable to decode data")
 
@@ -196,6 +201,7 @@ def _format_value_for_markdown(value):
     :param value: The setting value to format
     :return: Formatted value string
     """
+
     if not value or value == "Not configured":
         return value
 
