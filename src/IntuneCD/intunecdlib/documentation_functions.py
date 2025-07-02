@@ -149,17 +149,13 @@ def remove_characters(string):
 
 
 def is_base64(s):
-    """Check if a string is a valid base64-encoded string"""
     try:
-        # Attempt to decode the string
         if isinstance(s, str):
-            decoded = base64.b64decode(s.encode())
+            # Test for valid base64 by decoding and re-encoding
+            return base64.b64encode(base64.b64decode(s)).decode() == s
         else:
-            decoded = base64.b64decode(s)
-        # If decoding succeeds and the decoded bytes match the original string, it's a valid base64-encoded string
-        return decoded == s.encode()
-    except (TypeError, binascii.Error):
-        # If decoding fails, it's not a valid base64-encoded string
+            return False
+    except Exception:
         return False
 
 
