@@ -26,10 +26,10 @@ def html_table(headers, rows):
     table = "<table>\n<thead><tr>"
     for h in headers:
         table += f"<th>{h}</th>"
-    table += "</tr></thead>\n<tbody>\n"
+    table += "</tr></thead><tbody>"
     for row in rows:
-        table += "<tr>" + "".join(f"<td>{cell}</td>" for cell in row) + "</tr>\n"
-    table += "</tbody>\n</table>"
+        table += "<tr>" + "".join(f"<td>{cell}</td>" for cell in row) + "</tr>"
+    table += "</tbody>\n</table>\n\n"
     return table
 
 
@@ -448,7 +448,7 @@ def document_configs(
                     md.write(f"Description: {escape_markdown(description)}\n")
                 if assignments_table:
                     md.write("#### Assignments\n")
-                    md.write(str(assignments_table) + "\n")
+                    md.write(str(assignments_table) + "\n\n")
                 md.write("#### Configuration\n")
                 md.write(str(config_table) + "\n")
 
@@ -564,7 +564,7 @@ def document_management_intents(configpath, outpath, header, split):
                         md.write(f"Description: {escape_markdown(description)} \n")
                     if assignments_table:
                         md.write("#### Assignments \n")
-                        md.write(str(assignments_table) + "\n")
+                        md.write(str(assignments_table) + "\n\n")
                     md.write("#### Configuration \n")
                     md.write(str(config_table) + "\n")
 
