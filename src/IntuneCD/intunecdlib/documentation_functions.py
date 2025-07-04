@@ -14,7 +14,23 @@ import platform
 import re
 
 import yaml
-from pytablewriter import MarkdownTableWriter
+
+
+def html_table(headers, rows):
+    """
+    Generate an HTML table from headers and rows.
+    :param headers: List of column headers
+    :param rows: List of row lists
+    :return: HTML table as a string
+    """
+    table = "<table>\n<thead><tr>"
+    for h in headers:
+        table += f"<th>{h}</th>"
+    table += "</tr></thead><tbody>"
+    for row in rows:
+        table += "<tr>" + "".join(f"<td>{cell}</td>" for cell in row) + "</tr>"
+    table += "</tbody>\n</table>\n\n"
+    return table
 
 
 def md_file(outpath):
@@ -31,18 +47,12 @@ def md_file(outpath):
 
 def write_table(data):
     """
-    This function creates the markdown table.
+    This function creates the HTML table.
 
     :param data: The data to be written to the table
-    :return: The Markdown table writer
+    :return: The HTML table as a string
     """
-
-    writer = MarkdownTableWriter(
-        headers=["setting", "value"],
-        value_matrix=data,
-    )
-
-    return writer
+    return html_table(["setting", "value"], data)
 
 
 def escape_markdown(text):
@@ -61,16 +71,14 @@ def escape_markdown(text):
 
 def assignment_table(data):
     """
-    This function creates the Markdown assignments table.
+    This function creates the HTML assignments table.
 
     :param data: The data to be written to the table
-    :return: The Markdown table writer
+    :return: The HTML table as a string
     """
 
     def write_assignment_table(data, headers):
-        writer = MarkdownTableWriter(headers=headers, value_matrix=data)
-
-        return writer
+        return html_table(headers, data)
 
     table = ""
     if "assignments" in data:
@@ -168,6 +176,42 @@ def decode_base64(data):
         raise ValueError("Unable to decode data")
 
 
+def _format_value_for_markdown(value):
+    """
+    Format setting value for markdown display, handling XML/JSON structures.
+    If XML, wrap in <details> block with summary and code block.
+    :param value: The setting value to format
+    :return: Formatted value string
+    """
+    if not value or value == "Not configured":
+        return value
+
+    value_str = str(value)
+
+    # Check if this looks like XML content
+    if value_str.strip().startswith('<') and value_str.strip().endswith('>'):
+        return (
+            f"<details>\n\n"
+            f"```xml\n{value_str.strip()}\n```\n\n"
+            f"</details>"
+        )
+    # JSON pretty print (optional, keep as is)
+    elif (value_str.strip().startswith('{') and value_str.strip().endswith('}')) or \
+       (value_str.strip().startswith('[') and value_str.strip().endswith(']')):
+        try:
+            import json
+            parsed = json.loads(value_str.strip())
+            formatted_json = json.dumps(parsed, indent=2)
+            return (
+                f"<details>\n\n"
+                f"```json\n{formatted_json}\n```\n\n"
+                f"</details>"
+            )
+        except Exception:
+            pass
+    return value_str
+
+
 def clean_list(data, decode):
     """
     This function returns a list with strings to be used in a table.
@@ -181,6 +225,7 @@ def clean_list(data, decode):
             if isinstance(i, (str, int, bool)):
                 if decode and is_base64(i):
                     i = decode_base64(i)
+                i = _format_value_for_markdown(i)
                 string += f"<li> {i} </li>"
             elif isinstance(i, dict):
                 string += dict_to_string(i)
@@ -223,7 +268,7 @@ def clean_list(data, decode):
     def simple_value_to_string(key, val) -> str:
         if decode and is_base64(val):
             val = decode_base64(val)
-
+        val = _format_value_for_markdown(val)
         if isinstance(val, str):
             val = val.replace("\\", "\\\\")
 
@@ -235,6 +280,7 @@ def clean_list(data, decode):
             if isinstance(i, (str, int, bool)):
                 if decode and is_base64(i):
                     i = decode_base64(i)
+                i = _format_value_for_markdown(i)
                 string += f"{i}<br/>"
             if isinstance(i, list):
                 string += list_to_string(i)
@@ -246,9 +292,9 @@ def clean_list(data, decode):
     def string(s) -> str:
         if decode and is_base64(s):
             s = decode_base64(s)
-
-        if len(s) > 200:
-            string = f"<details><summary>Click to expand...</summary>{s}</details>"
+        s = _format_value_for_markdown(s)
+        if  len(s) > 200 and not s.startswith('<details'):
+            string = f"<details>{s}</details>"
         else:
             string = s
 
@@ -407,7 +453,7 @@ def document_configs(
                     md.write(f"Description: {escape_markdown(description)}\n")
                 if assignments_table:
                     md.write("#### Assignments\n")
-                    md.write(str(assignments_table) + "\n")
+                    md.write(str(assignments_table) + "\n\n")
                 md.write("#### Configuration\n")
                 md.write(str(config_table) + "\n")
 
@@ -451,6 +497,8 @@ def document_management_intents(configpath, outpath, header, split):
                 elif filename.endswith(".json"):
                     f = open(filename, encoding="utf-8")
                     repo_data = json.load(f)
+                else:
+                    continue
 
                 # Create assignments table
                 assignments_table = ""
@@ -521,7 +569,7 @@ def document_management_intents(configpath, outpath, header, split):
                         md.write(f"Description: {escape_markdown(description)} \n")
                     if assignments_table:
                         md.write("#### Assignments \n")
-                        md.write(str(assignments_table) + "\n")
+                        md.write(str(assignments_table) + "\n\n")
                     md.write("#### Configuration \n")
                     md.write(str(config_table) + "\n")
 
@@ -598,3 +646,405 @@ def get_md_files(configpath):
     md_files.sort(key=lambda f: os.path.splitext(os.path.basename(f))[0].lower())
 
     return md_files
+
+
+def document_settings_catalog(
+    configpath, outpath, header, split, split_per_config=False
+):
+    """
+    Specialized documentation function for Settings Catalog policies.
+    Creates simplified configuration sections and organized setting tables by category.
+
+    :param configpath: Path to backup files
+    :param outpath: Base path for Markdown output
+    :param header: Configuration type header
+    :param split: Split into one file per type
+    :param split_per_config: Split into one file per individual config
+    """
+    if not os.path.exists(configpath):
+        return
+
+    # Base file for non-split or type-split mode
+    if split and not split_per_config:
+        outpath = os.path.join(configpath, f"{header}.md")
+        md_file(outpath)
+
+    if split_per_config is False:
+        with open(outpath, "a", encoding="utf-8") as md:
+            md.write("## " + header + "\n")
+
+    # Use recursive pattern to catch deeper structures
+    pattern = os.path.join(
+        configpath, "**", "*.[jy][sa][mo][nl]"
+    )  # Matches .json, .yaml, .yml
+    files = sorted(glob.glob(pattern, recursive=True), key=str.casefold)
+    if not files:
+        return
+
+    for filename in files:
+        if (
+            filename.endswith(".md")
+            or os.path.isdir(filename)
+            or os.path.basename(filename) == ".DS_Store"
+        ):
+            continue
+
+        try:
+            # Load data
+            with open(filename, encoding="utf-8") as f:
+                if filename.endswith((".yaml", ".yml")):
+                    repo_data = json.loads(json.dumps(yaml.safe_load(f)))
+                elif filename.endswith(".json"):
+                    repo_data = json.load(f)
+                else:
+                    continue
+
+            # Prepare assignments table
+            assignments_table = assignment_table(repo_data)
+
+            # Extract basic policy information
+            policy_name = repo_data.get("name", "Unknown Policy")
+            description = repo_data.get("description", "")
+            platform = repo_data.get("platforms", "")
+            technologies = repo_data.get("technologies", "")
+            scope_tags = repo_data.get("roleScopeTagIds", [])
+            created_date = repo_data.get("createdDateTime", "")
+            modified_date = repo_data.get("lastModifiedDateTime", "")
+
+            # Create basic policy info table
+            basics_table_data = [
+                ["Name", policy_name],
+                ["Description", description.replace('\n', ' ')] if description else None,
+                ["Profile type", "Settings catalog"],
+                ["Platform supported", _format_platform(platform)],
+                ["Technologies", technologies],
+                ["Scope tags", ", ".join(scope_tags) if scope_tags else "Default"]
+            ]
+
+            # Add dates if available
+            if created_date:
+                basics_table_data.append(["Created", _format_date(created_date)])
+            if modified_date:
+                basics_table_data.append(["Last modified", _format_date(modified_date)])
+
+            # Remove None entries
+            basics_table_data = [item for item in basics_table_data if item is not None]
+
+            basics_table = _write_clean_table(["Setting", "Value"], basics_table_data)
+
+            # Process settings by category
+            settings = repo_data.get("settings", [])
+            settings_tables = _create_settings_tables(settings)
+
+            # Determine output file and header
+            if split_per_config:
+                # One file per config
+                safe_config_name = re.sub(r'[<>:"/\\|?*]', "_", policy_name)
+                if not os.path.exists(f"{configpath}/docs"):
+                    os.makedirs(f"{configpath}/docs")
+                config_outpath = os.path.join(
+                    f"{configpath}/docs", f"{safe_config_name}.md"
+                )
+                md_file(config_outpath)
+                target_md = config_outpath
+                top_header = f"# {policy_name}"
+                split_per_config_index_md(configpath, header)
+            elif split:
+                # One file per type
+                target_md = outpath
+                top_header = f"### {policy_name}"
+            else:
+                # Single file
+                target_md = outpath
+                top_header = f"### {policy_name}"
+
+            # Write to file
+            with open(target_md, "a", encoding="utf-8") as md:
+                md.write(top_header + "\n\n")
+
+                if assignments_table:
+                    md.write("#### Assignments\n")
+                    md.write(str(assignments_table) + "\n\n")
+
+                md.write("#### Basics\n")
+                md.write(str(basics_table) + "\n\n")
+
+                # Write single configuration table
+                if settings_tables:
+                    # There should only be one table now
+                    for category_name, table in settings_tables:
+                        md.write(f"#### {category_name}\n")
+                        md.write(str(table) + "\n\n")
+
+        except Exception as e:
+            print(f"[DEBUG] Error processing Settings Catalog {filename}: {type(e).__name__}: {e}")
+
+
+def _format_platform(platform):
+    """Format platform string to be more readable."""
+    platform_map = {
+        "windows10": "Windows 10 and later",
+        "macOS": "macOS",
+        "iOS": "iOS/iPadOS",
+        "android": "Android"
+    }
+    return platform_map.get(platform, platform)
+
+
+def _format_date(date_string):
+    """Format ISO date string to readable format."""
+    try:
+        from datetime import datetime
+        # Parse ISO format and convert to readable format
+        dt = datetime.fromisoformat(date_string.replace('Z', '+00:00'))
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return date_string
+
+
+def _create_settings_tables(settings):
+    """
+    Create a settings table grouped and sorted by categoryDisplayName, with a visually distinctive row for each category.
+    """
+    if not settings:
+        return []
+
+    # Build a lookup for all definitions by id for fast access
+    def build_definitions_lookup(settings):
+        lookup = {}
+        for setting in settings:
+            for definition in setting.get("settingDefinitions", []):
+                lookup[definition["id"]] = definition
+        return lookup
+
+    definitions_lookup = build_definitions_lookup(settings)
+
+    # Group settings by categoryDisplayName
+    category_map = {}
+    for setting in settings:
+        # Get the main definition for this setting
+        main_def = setting.get("settingDefinitions", [{}])[0]
+        category = main_def.get("categoryDisplayName", "Other Settings")
+        if category not in category_map:
+            category_map[category] = []
+        parent_definitions = {d["id"]: d for d in setting.get("settingDefinitions", [])}
+        setting_instance = setting.get("settingInstance")
+        if setting_instance:
+            # Use your existing extract_setting logic
+            rows = _extract_setting_rows_for_category(setting_instance, parent_definitions, definitions_lookup)
+            category_map[category].extend(rows)
+
+    # Sort categories alphabetically
+    sorted_categories = sorted(category_map.keys(), key=lambda x: x.lower())
+
+    # Build the table rows with category headers
+    table_rows = []
+    for category in sorted_categories:
+        # Add a visually distinctive row for the category
+        table_rows.append([
+            f"<tr style='font-weight:bold;'><td colspan='3'>{category}</td></tr>"
+        ])
+        # Add all settings for this category
+        table_rows.extend(category_map[category])
+
+    # Flatten rows for html_table (skip the header row from html_table, as we add our own)
+    headers = ["Setting", "Value", "Description"]
+    # html_table expects rows as lists, but our category row is a raw HTML string, so we need to handle this
+    def custom_html_table(headers, rows):
+        table = "<table>\n<thead><tr>"
+        for h in headers:
+            table += f"<th>{h}</th>"
+        table += "</tr></thead>\n<tbody>\n"
+        for row in rows:
+            if isinstance(row, str) or (isinstance(row, list) and len(row) == 1 and row[0].startswith("<tr")):
+                # Raw HTML row (category header)
+                table += row[0] if isinstance(row, list) else row
+            else:
+                table += "<tr>" + "".join(f"<td>{cell}</td>" for cell in row) + "</tr>"
+        table += "</tbody>\n</table>"
+        return table
+
+    table = custom_html_table(headers, table_rows)
+    return [("Configuration", table)]
+
+
+def _extract_setting_rows_for_category(setting_instance, parent_definitions, definitions_lookup):
+    """
+    Recursively extract setting rows for a category.
+    """
+    # Use your existing extract_setting logic, but return a list of [Setting, Value, Description] rows.
+    def extract_setting(setting_instance, parent_definitions):
+        setting_definition_id = setting_instance.get("settingDefinitionId", "")
+        definition = parent_definitions.get(setting_definition_id) or definitions_lookup.get(setting_definition_id, {})
+        display_name = definition.get("displayName", _format_setting_name(setting_definition_id))
+        description = definition.get("description", "")
+        if isinstance(description, str):
+            description = re.sub(r'((\r\n|\r|\n){2,})', r'\r\n', description)
+            description = description.rstrip(' \t')
+            if len(description) > 60:
+                description = (
+                    f"<details>{description}\n</details>"
+                )
+
+        if "simpleSettingValue" in setting_instance:
+            value = setting_instance["simpleSettingValue"].get("value", "")
+            formatted_value = _format_value_for_markdown(value if value != "" else "Not configured")
+            return [[display_name, formatted_value, description]]
+
+        elif "simpleSettingCollectionValue" in setting_instance:
+            collection = setting_instance["simpleSettingCollectionValue"]
+            if isinstance(collection, list) and collection:
+                values = []
+                for item in collection:
+                    val = item.get("value", "")
+                    if val != "":
+                        values.append(str(val))
+                if values:
+                    formatted_value = _format_value_for_markdown(f"\n\n```\n" + "\n".join(values) + "\n```\n")
+                else:
+                    formatted_value = _format_value_for_markdown("Not configured")
+                return [[display_name, formatted_value, description]]
+            else:
+                return [[display_name, "Not configured", description]]
+
+        elif "choiceSettingValue" in setting_instance:
+            choice_value_obj = setting_instance["choiceSettingValue"]
+            value = choice_value_obj.get("value", "")
+            children = choice_value_obj.get("children", [])
+            option_display_name = None
+            if value and "options" in definition:
+                for option in definition["options"]:
+                    if option.get("value") == value or option.get("itemId") == value:
+                        option_display_name = option.get("displayName") or option.get("name")
+                        break
+            formatted_value = _format_value_for_markdown(option_display_name if option_display_name else (value if value else "Not configured"))
+            rows = []
+            rows.append([display_name, formatted_value, description])
+            for child in children:
+                rows.extend(extract_setting(child, parent_definitions))
+            return rows
+
+        elif "groupSettingCollectionValue" in setting_instance:
+            collection = setting_instance["groupSettingCollectionValue"]
+            rows = []
+            if isinstance(collection, list):
+                for item in collection:
+                    children = item.get("children", [])
+                    for child in children:
+                        rows.extend(extract_setting(child, parent_definitions))
+            return rows if rows else [[display_name, "Collection value", description]]
+
+        return [[display_name, "Not configured", description]]
+
+    return extract_setting(setting_instance, parent_definitions)
+
+
+def _write_clean_table(headers, data):
+    """
+    Create a clean, compact HTML table.
+    :param headers: List of column headers
+    :param data: List of rows, each row is a list of values
+    :return: Clean HTML table string
+    """
+    if not data:
+        return ""
+    return html_table(headers, data)
+
+
+def _format_setting_name(setting_definition_id):
+    """
+    Format setting definition ID into a readable name.
+
+    :param setting_definition_id: The setting definition ID
+    :return: Formatted setting name
+    """
+    if not setting_definition_id:
+        return "Unknown Setting"
+
+    # Special cases for well-known settings
+    if "machineinactivitylimit" in setting_definition_id.lower():
+        return "Interactive Logon Machine Inactivity Limit"
+
+    # Extract the meaningful part from the ID
+    parts = setting_definition_id.split("_")
+
+    # Find the last meaningful parts (usually after the category)
+    if len(parts) > 3:
+        # Take the last 2-3 parts and format them
+        meaningful_parts = parts[-3:] if len(parts) > 5 else parts[-2:]
+        # Join and format
+        name = " ".join(meaningful_parts)
+        # Convert to title case, handling version numbers
+        name = re.sub(r'_v\d+$', '', name)  # Remove version suffix
+        name = re.sub(r'([a-z])([A-Z])', r'\1 \2', name)  # Add spaces before capitals
+        return name.title()
+
+    # Fallback to just converting underscores to spaces and title case
+    return setting_definition_id.replace("_", " ").title()
+
+
+def _extract_setting_value(setting_instance):
+    """
+    Extract the value from a setting instance, including children values.
+
+    :param setting_instance: The setting instance object
+    :return: Formatted setting value or list of child values
+    """
+    if "simpleSettingValue" in setting_instance:
+        value = setting_instance["simpleSettingValue"].get("value", "")
+        return value if value != "" else "Not configured"
+    elif "choiceSettingValue" in setting_instance:
+        choice_value_obj = setting_instance["choiceSettingValue"]
+
+        # Check if there are children with actual values
+        if "children" in choice_value_obj and choice_value_obj["children"]:
+            child_values = []
+            for child in choice_value_obj["children"]:
+                child_value = _extract_setting_value(child)
+                if child_value and child_value != "Not configured" and child_value != "":
+                    child_values.append(child_value)
+
+            # If we found child values, return them; otherwise fall back to choice value
+            if child_values:
+                return child_values if len(child_values) > 1 else child_values[0]
+
+        # Fallback to choice value
+        choice_value = choice_value_obj.get("value", "")
+        if choice_value:
+            # Try to extract meaningful part from choice value
+            if "_" in choice_value:
+                parts = choice_value.split("_")
+                if len(parts) > 1:
+                    meaningful_part = parts[-1]
+                    # Return the meaningful part, but only if it's not just "selected"
+                    if meaningful_part.lower() not in ["selected", "enabled", "disabled"]:
+                        return meaningful_part.title()
+            return choice_value
+        return "Not configured"
+    elif "groupSettingCollectionValue" in setting_instance:
+        collection = setting_instance["groupSettingCollectionValue"]
+        if isinstance(collection, list) and len(collection) > 0:
+            extracted = []
+            for item in collection:
+                # If the item has children, extract their values
+                if "children" in item and item["children"]:
+                    child_values = []
+                    for child in item["children"]:
+                        child_value = _extract_setting_value(child)
+                        if child_value and child_value != "Not configured" and child_value != "":
+                            child_values.append(child_value)
+                    if child_values:
+                        # If only one value, don't wrap in list
+                        extracted.append(child_values if len(child_values) > 1 else child_values[0])
+                else:
+                    # Fallback: try to extract value directly
+                    value = item.get("value", None)
+                    if value:
+                        extracted.append(value)
+            # Flatten if only one item
+            if len(extracted) == 1:
+                return extracted[0]
+            return extracted if extracted else "Not configured"
+        return "Collection value"
+
+    return "Not configured"

@@ -100,6 +100,25 @@ class BaseUpdateModule(BaseGraphModule):
                 self.log(msg=f"No changes found for {self.config_type}: {self.name}")
         return diffs
 
+    def remove_non_graph_properties(self, data):
+        """
+        Recursively remove properties not accepted by Graph API, such as 'categoryDisplayName' from settingDefinitions.
+        """
+        if isinstance(data, dict):
+            # Remove from settingDefinitions in settings
+            if "settings" in data and isinstance(data["settings"], list):
+                for setting in data["settings"]:
+                    if "settingDefinitions" in setting and isinstance(setting["settingDefinitions"], list):
+                        for definition in setting["settingDefinitions"]:
+                            definition.pop("categoryDisplayName", None)
+            # Recursively clean nested dicts
+            for v in data.values():
+                self.remove_non_graph_properties(v)
+        elif isinstance(data, list):
+            for item in data:
+                self.remove_non_graph_properties(item)
+        return data
+
     def _get_deep_diff(
         self, repo_data: dict, intune_data: dict, exclude_paths: list
     ) -> dict[str, any]:
@@ -311,6 +330,7 @@ class BaseUpdateModule(BaseGraphModule):
             data (dict): The data to use
         """
         data.pop("assignments", None)
+        data = self.remove_non_graph_properties(data)
         request_data = json.dumps(data)
         if self.azure_update:
             self.make_azure_request(
@@ -376,6 +396,7 @@ class BaseUpdateModule(BaseGraphModule):
         """
         self.log(msg=f"{self.config_type} {self.name} not found, creating: {self.name}")
         data.pop("assignments", None)
+        data = self.remove_non_graph_properties(data)
         request_data = json.dumps(data)
         self.create_request = self.make_graph_request(
             endpoint=self.endpoint + config_endpoint,

@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from .intunecdlib.documentation_functions import (
     document_configs,
     document_management_intents,
+    document_settings_catalog,
 )
 from .decorators import time_command
 
@@ -66,7 +67,6 @@ def document_intune(
         ("Scripts/Shell", "Shell Scripts"),
         ("Custom Attributes", "Custom Attributes"),
         ("Scripts/Powershell", "Powershell Scripts"),
-        ("Settings Catalog", "Settings Catalog"),
         ("Driver Updates", "Windows Driver Updates"),
         ("Feature Updates", "Windows Feature Updates"),
         ("Quality Updates", "Windows Quality Updates"),
@@ -118,4 +118,9 @@ def document_intune(
     # **Run Management Intents Sequentially**
     document_management_intents(
         f"{configpath}/Management Intents/", outpath, "Management Intents", split
+    )
+    
+    # **Run Settings Catalog with specialized documentation**
+    document_settings_catalog(
+        f"{configpath}/Settings Catalog/", outpath, "Settings Catalog", split, split_per_config
     )
