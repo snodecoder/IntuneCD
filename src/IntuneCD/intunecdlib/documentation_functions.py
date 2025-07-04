@@ -191,7 +191,7 @@ def decode_base64(data):
             f"</details>"
         )
     except (base64.binascii.Error, UnicodeDecodeError):
-        raise ValueError("Unable to decode data")
+        raise ValueError(f"Unable to decode data: {data}")
 
 
 def _format_value_for_markdown(value):
