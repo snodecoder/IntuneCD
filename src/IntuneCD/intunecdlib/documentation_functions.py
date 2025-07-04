@@ -187,17 +187,12 @@ def decode_base64(data):
     """
 
     try:
-        decoded_data = base64.b64decode(data).decode("utf-8")
-        return (
-            f"<details>\n\n"
-            f"```text\n{decoded_data}\n```\n\n"
-            f"</details>"
-        )
+        return base64.b64decode(data).decode("utf-8")
     except (base64.binascii.Error, UnicodeDecodeError):
         raise ValueError(f"Unable to decode data: {data}")
 
 
-def _format_value_for_markdown(value):
+def _format_value_for_markdown(value, decode=False):
     """
     Format setting value for markdown display, handling XML/JSON structures.
     If XML, wrap in <details> block with summary and code block.
@@ -221,7 +216,6 @@ def _format_value_for_markdown(value):
     elif (value_str.strip().startswith('{') and value_str.strip().endswith('}')) or \
        (value_str.strip().startswith('[') and value_str.strip().endswith(']')):
         try:
-            import json
             parsed = json.loads(value_str.strip())
             formatted_json = json.dumps(parsed, indent=2)
             return (
@@ -231,6 +225,17 @@ def _format_value_for_markdown(value):
             )
         except Exception:
             pass
+    elif decode and is_base64(value_str):
+        # If decode is True and value is base64, decode it
+        try:
+            return (
+                f"<details>\n\n"
+                f"```powershell\n{decode_base64(value_str)}\n```\n\n"
+                f"</details>"
+            )
+        except ValueError as e:
+            print(f"[DEBUG] Error decoding base64: {e}")
+            return value_str
     return value_str
 
 
@@ -245,9 +250,7 @@ def clean_list(data, decode):
         string = ""
         for i in item_list:
             if isinstance(i, (str, int, bool)):
-                if decode and is_base64(i):
-                    i = decode_base64(i)
-                i = _format_value_for_markdown(i)
+                i = _format_value_for_markdown(i, decode)
                 string += f"<li> {i} </li>"
             elif isinstance(i, dict):
                 string += dict_to_string(i)
@@ -288,9 +291,7 @@ def clean_list(data, decode):
         return string
 
     def simple_value_to_string(key, val) -> str:
-        if decode and is_base64(val):
-            val = decode_base64(val)
-        val = _format_value_for_markdown(val)
+        val = _format_value_for_markdown(val, decode)
         if isinstance(val, str):
             val = val.replace("\\", "\\\\")
 
@@ -300,9 +301,7 @@ def clean_list(data, decode):
         string = ""
         for i in item_list:
             if isinstance(i, (str, int, bool)):
-                if decode and is_base64(i):
-                    i = decode_base64(i)
-                i = _format_value_for_markdown(i)
+                i = _format_value_for_markdown(i, decode)
                 string += f"{i}<br/>"
             if isinstance(i, list):
                 string += list_to_string(i)
@@ -312,9 +311,7 @@ def clean_list(data, decode):
         return string
 
     def string(s) -> str:
-        if decode and is_base64(s):
-            s = decode_base64(s)
-        s = _format_value_for_markdown(s)
+        s = _format_value_for_markdown(s, decode)
         if  len(s) > 200 and not s.startswith('<details'):
             string = f"<details>{s}</details>"
         else:
