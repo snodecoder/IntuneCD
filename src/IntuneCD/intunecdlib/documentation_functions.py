@@ -151,8 +151,6 @@ def remove_characters(string):
 def is_base64(s):
     """
     Validates if a string is properly base64-encoded.
-    Combines regex pattern check and decode verification.
-
     :param s: Input string
     :return: True if valid base64, False otherwise
     """
@@ -160,6 +158,10 @@ def is_base64(s):
         return False
 
     s = s.strip()
+
+    # Minimum length for base64 (at least 8 chars, multiple of 4)
+    if len(s) < 8 or len(s) % 4 != 0:
+        return False
 
     # Regex to match base64 pattern (includes optional padding)
     base64_regex = re.compile(r'^(?:[A-Za-z0-9+/]{4})*' +
@@ -169,10 +171,11 @@ def is_base64(s):
         return False
 
     try:
-        # Try decoding with base64 to ensure it's valid
-        base64.b64decode(s, validate=True)
+        decoded = base64.b64decode(s, validate=True)
+        # Try to decode as UTF-8, if fails, not valid base64 text
+        decoded.decode("utf-8")
         return True
-    except:
+    except Exception:
         return False
 
 
