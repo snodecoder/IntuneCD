@@ -70,7 +70,8 @@ def backup_intune(
     # Enrich data if the enrich flag is set
     if enrich:
         from .intunecdlib.BaseGraphModule import BaseGraphModule
-        import os, json
+        import os
+        import json
 
         graph = BaseGraphModule(token=token)
         settings = graph.make_graph_request("https://graph.microsoft.com/beta/deviceManagement/configurationSettings")
