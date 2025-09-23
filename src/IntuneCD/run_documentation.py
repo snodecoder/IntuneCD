@@ -86,6 +86,11 @@ def get_parser(include_help=True):
         type=int,
         default=10,
     )
+    parser.add_argument(
+        "--enrich",
+        help="If set, enriches documentation with configurationSettings and configurationCategories if available",
+        action="store_true",
+    )
 
     return parser
 
@@ -105,6 +110,7 @@ def start(args=None):
         decode,
         split_per_config,
         max_workers,
+        enrich,  # <-- add this
     ):
         now = datetime.now()
         current_date = now.strftime("%d/%m/%Y %H:%M:%S")
@@ -123,6 +129,7 @@ def start(args=None):
             decode,
             split_per_config,
             max_workers,
+            enrich,  # <-- pass enrich
         )
 
         write_type_header(split, outpath, "Entra")
@@ -196,6 +203,7 @@ def start(args=None):
         args.decode,
         args.split_per_config,
         args.max_workers,
+        args.enrich,  # <-- add this
     )
 
 

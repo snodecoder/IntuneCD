@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import os
+import json
 
 from .intunecdlib.documentation_functions import (
     document_configs,
@@ -18,6 +20,7 @@ def document_intune(
     decode,
     split_per_config,
     max_workers,
+    enrich=False,  # <-- add this
 ):
     """
     This function is used to document Intune configuration using threading.
@@ -77,6 +80,19 @@ def document_intune(
     # sort doc_tasks alphabetically
     doc_tasks = sorted(doc_tasks, key=lambda x: x[1])
 
+    configuration_settings = None
+    configuration_categories = None
+
+    if enrich:
+        settings_path = os.path.join(configpath, "configurationSettings.json")
+        categories_path = os.path.join(configpath, "configurationCategories.json")
+        if os.path.exists(settings_path):
+            with open(settings_path, "r", encoding="utf-8") as f:
+                configuration_settings = json.load(f)
+        if os.path.exists(categories_path):
+            with open(categories_path, "r", encoding="utf-8") as f:
+                configuration_categories = json.load(f)
+
     if split or split_per_config:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
@@ -90,6 +106,8 @@ def document_intune(
                     cleanup,
                     decode,
                     split_per_config,
+                    configuration_settings if task[1] == "Settings Catalog" else None,
+                    configuration_categories if task[1] == "Settings Catalog" else None,
                 ): task[1]
                 for task in doc_tasks
             }
@@ -113,6 +131,8 @@ def document_intune(
                 cleanup,
                 decode,
                 split_per_config,
+                configuration_settings if task[1] == "Settings Catalog" else None,
+                configuration_categories if task[1] == "Settings Catalog" else None,
             )
 
     # **Run Management Intents Sequentially**
