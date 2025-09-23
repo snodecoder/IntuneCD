@@ -73,7 +73,8 @@ def backup_intune(
         import os
         import json
 
-        graph = BaseGraphModule(token=token)
+        graph = BaseGraphModule()
+        graph.token = token
         settings = graph.make_graph_request("https://graph.microsoft.com/beta/deviceManagement/configurationSettings")
         with open(os.path.join(path, "configurationSettings.json"), "w", encoding="utf-8") as f:
             json.dump(settings, f, indent=2)
