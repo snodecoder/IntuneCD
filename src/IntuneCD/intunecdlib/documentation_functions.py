@@ -598,3 +598,124 @@ def get_md_files(configpath):
     md_files.sort(key=lambda f: os.path.splitext(os.path.basename(f))[0].lower())
 
     return md_files
+
+
+def document_settings_catalog(
+    configpath,
+    outpath,
+    header,
+    max_length,
+    split,
+    cleanup,
+    decode,
+    split_per_config,
+    configuration_settings=None,
+    configuration_categories=None,
+):
+    """
+    Documents Settings Catalog configurations, enriched with configurationSettings and configurationCategories.
+    """
+    if not os.path.exists(configpath):
+        return
+
+    # Prepare output path for split mode
+    if split and not split_per_config:
+        outpath = os.path.join(configpath, f"{header}.md")
+        md_file(outpath)
+
+    if split_per_config is False:
+        with open(outpath, "a", encoding="utf-8") as md:
+            md.write("## " + header + "\n")
+
+    pattern = os.path.join(configpath, "**", "*.json")
+    files = sorted(glob.glob(pattern, recursive=True), key=str.casefold)
+    if not files:
+        return
+
+    # Build lookup dictionaries for enrichment
+    settings_lookup = {}
+    categories_lookup = {}
+
+    if configuration_settings:
+        for s in configuration_settings.get("value", []):
+            settings_lookup[s.get("id")] = s
+    if configuration_categories:
+        for c in configuration_categories.get("value", []):
+            categories_lookup[c.get("id")] = c
+
+    for filename in files:
+        if filename.endswith(".md") or os.path.isdir(filename):
+            continue
+
+        try:
+            with open(filename, encoding="utf-8") as f:
+                repo_data = json.load(f)
+
+            assignments_table = assignment_table(repo_data)
+            repo_data.pop("assignments", None)
+            description = repo_data.pop("description", "") or ""
+
+            config_table_list = []
+
+            # Enrich settings
+            for setting in repo_data.get("settings", []):
+                setting_id = setting.get("definitionId")
+                enriched = settings_lookup.get(setting_id, {})
+                setting_name = enriched.get("displayName", setting.get("definitionId"))
+                setting_desc = enriched.get("description", "")
+                category_id = enriched.get("categoryId")
+                category_name = categories_lookup.get(category_id, {}).get("displayName", "")
+
+                value = setting.get("value", "")
+                if max_length and isinstance(value, str) and len(value) > max_length:
+                    value = "Value too long to display"
+
+                # Table output logic unchanged from original code
+                config_table_list.append([
+                    f"{setting_name} ({category_name})",
+                    f"{value}\n{setting_desc}" if setting_desc else f"{value}"
+                ])
+
+            config_table = write_table(config_table_list)
+
+            config_name = repo_data.get(
+                "displayName",
+                repo_data.get(
+                    "name",
+                    os.path.splitext(os.path.basename(filename))[0]
+                    .replace("_", " ")
+                    .title(),
+                ),
+            )
+            if split_per_config:
+                safe_config_name = re.sub(
+                    r'[<>:"/\\|?*]', "_", config_name
+                )
+                if not os.path.exists(f"{configpath}/docs"):
+                    os.makedirs(f"{configpath}/docs")
+                config_outpath = os.path.join(
+                    f"{configpath}/docs", f"{safe_config_name}.md"
+                )
+                md_file(config_outpath)
+                target_md = config_outpath
+                top_header = f"# {config_name}"
+                split_per_config_index_md(configpath, header)
+            elif split:
+                target_md = outpath
+                top_header = f"### {config_name}"
+            else:
+                target_md = outpath
+                top_header = f"### {config_name}"
+
+            with open(target_md, "a", encoding="utf-8") as md:
+                md.write(top_header + "\n")
+                if description:
+                    md.write(f"Description: {escape_markdown(description)}\n")
+                if assignments_table:
+                    md.write("#### Assignments\n")
+                    md.write(str(assignments_table) + "\n")
+                md.write("#### Configuration\n")
+                md.write(str(config_table) + "\n")
+
+        except Exception as e:
+            print(f"[DEBUG] Error processing {filename}: {type(e).__name__}: {e}")

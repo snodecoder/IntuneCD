@@ -6,6 +6,7 @@ import json
 from .intunecdlib.documentation_functions import (
     document_configs,
     document_management_intents,
+    document_settings_catalog,
 )
 from .decorators import time_command
 
@@ -95,22 +96,34 @@ def document_intune(
 
     if split or split_per_config:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {
-                executor.submit(
-                    document_configs,
-                    f"{configpath}/{task[0]}",
-                    outpath,
-                    task[1],
-                    maxlength,
-                    split,
-                    cleanup,
-                    decode,
-                    split_per_config,
-                    configuration_settings if task[1] == "Settings Catalog" else None,
-                    configuration_categories if task[1] == "Settings Catalog" else None,
-                ): task[1]
-                for task in doc_tasks
-            }
+            futures = {}
+            for task in doc_tasks:
+                if task[1] == "Settings Catalog":
+                    futures[executor.submit(
+                        document_settings_catalog,
+                        f"{configpath}/{task[0]}",
+                        outpath,
+                        task[1],
+                        maxlength,
+                        split,
+                        cleanup,
+                        decode,
+                        split_per_config,
+                        configuration_settings,
+                        configuration_categories,
+                    )] = task[1]
+                else:
+                    futures[executor.submit(
+                        document_configs,
+                        f"{configpath}/{task[0]}",
+                        outpath,
+                        task[1],
+                        maxlength,
+                        split,
+                        cleanup,
+                        decode,
+                        split_per_config,
+                    )] = task[1]
 
             for future in as_completed(futures):
                 task_name = futures[future]
@@ -122,18 +135,30 @@ def document_intune(
     else:
         # Run sequentially if split options are disabled
         for task in doc_tasks:
-            document_configs(
-                f"{configpath}/{task[0]}",
-                outpath,
-                task[1],
-                maxlength,
-                split,
-                cleanup,
-                decode,
-                split_per_config,
-                configuration_settings if task[1] == "Settings Catalog" else None,
-                configuration_categories if task[1] == "Settings Catalog" else None,
-            )
+            if task[1] == "Settings Catalog":
+                document_settings_catalog(
+                    f"{configpath}/{task[0]}",
+                    outpath,
+                    task[1],
+                    maxlength,
+                    split,
+                    cleanup,
+                    decode,
+                    split_per_config,
+                    configuration_settings,
+                    configuration_categories,
+                )
+            else:
+                document_configs(
+                    f"{configpath}/{task[0]}",
+                    outpath,
+                    task[1],
+                    maxlength,
+                    split,
+                    cleanup,
+                    decode,
+                    split_per_config,
+                )
 
     # **Run Management Intents Sequentially**
     document_management_intents(
