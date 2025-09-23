@@ -206,6 +206,11 @@ def get_parser(include_help=True):
         help="When set, the script will not move files to archive. Might require manual cleanup.",
         action="store_true",
     )
+    parser.add_argument(
+        "--enrich",
+        help="If set, fetches Intune configurationSettings and configurationCategories for documentation enrichment",
+        action="store_true",
+    )
 
     return parser
 
@@ -266,7 +271,7 @@ def start(args=None):
         azure_token = obtain_azure_token(os.environ.get("TENANT_ID"), args.path)
 
     def run_backup(
-        path, output, exclude, token, prefix, append_id, max_workers, platforms
+        path, output, exclude, token, prefix, append_id, max_workers, platforms, enrich
     ):
         results = []
 
@@ -288,6 +293,7 @@ def start(args=None):
             args,
             max_workers,
             platforms,
+            enrich,  # <-- pass enrich here
         )
 
         from .intunecdlib.assignment_report import AssignmentReport
@@ -373,6 +379,7 @@ def start(args=None):
                 args.append_id,
                 args.max_workers,
                 platforms,
+                args.enrich,  # <-- add this
             )
 
     else:
