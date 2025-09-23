@@ -664,7 +664,10 @@ def document_settings_catalog(
                 setting_name = enriched.get("displayName", setting.get("definitionId"))
                 setting_desc = enriched.get("description", "")
                 category_id = enriched.get("categoryId")
-                category_name = categories_lookup.get(category_id, {}).get("displayName", "")
+                category_info = categories_lookup.get(category_id)
+                if not isinstance(category_info, dict):
+                    category_info = {}
+                category_name = category_info.get("displayName", "")
 
                 value = setting.get("value", "")
                 if max_length and isinstance(value, str) and len(value) > max_length:
