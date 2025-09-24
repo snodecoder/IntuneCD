@@ -29,7 +29,7 @@ def md_file(outpath):
         open(outpath, "w", encoding="utf-8").close()
 
 
-def write_table(data):
+def write_table(data, headers=None):
     """
     This function creates the markdown table.
 
@@ -38,7 +38,7 @@ def write_table(data):
     """
 
     writer = MarkdownTableWriter(
-        headers=["setting", "value"],
+        headers=headers if headers else ["setting", "value"],
         value_matrix=data,
     )
 
@@ -651,54 +651,61 @@ def document_settings_catalog(
             with open(filename, encoding="utf-8") as f:
                 repo_data = json.load(f)
 
+            # Assignments Table
             assignments_table = assignment_table(repo_data)
             repo_data.pop("assignments", None)
-            description = repo_data.pop("description", "") or ""
 
+            # Basics Table
+            basics_table = [
+                ["Name", repo_data.get("name", "")],
+                ["Profile type", "Settings catalog"],
+                ["Platform supported", repo_data.get("platforms", "")],
+                ["Technologies", repo_data.get("technologies", "")],
+                ["Scope tags", ", ".join(repo_data.get("roleScopeTagIds", []))],
+            ]
+            basics_md_table = write_table(basics_table)
+
+            # Configuration Table
             config_table_list = []
 
             # Enrich settings
             for setting in repo_data.get("settings", []):
-                setting_id = setting.get("definitionId")
-                enriched = settings_lookup.get(setting_id, {})
-                setting_name = enriched.get("displayName", setting.get("definitionId"))
+                # Extract settingDefinitionId
+                setting_instance = setting.get("settingInstance", {})
+                definition_id = setting_instance.get("settingDefinitionId")
+                enriched = settings_lookup.get(definition_id, {})
+                setting_name = enriched.get("displayName", definition_id)
                 setting_desc = enriched.get("description", "")
                 category_id = enriched.get("categoryId")
-                category_info = categories_lookup.get(category_id)
-                if not isinstance(category_info, dict):
-                    category_info = {}
-                category_name = category_info.get("displayName", "")
+                category_name = categories_lookup.get(category_id, {}).get("displayName", "")
 
-                value = setting.get("value", "")
+                # Extract value
+                value = ""
+                if "choiceSettingValue" in setting_instance:
+                    value = setting_instance["choiceSettingValue"].get("value", "")
+                elif "simpleSettingValue" in setting_instance:
+                    value = setting_instance["simpleSettingValue"].get("value", "")
+                elif "collectionSettingValue" in setting_instance:
+                    value = str(setting_instance["collectionSettingValue"].get("values", ""))
+
                 if max_length and isinstance(value, str) and len(value) > max_length:
                     value = "Value too long to display"
 
-                # Table output logic unchanged from original code
                 config_table_list.append([
                     f"{setting_name} ({category_name})",
-                    f"{value}\n{setting_desc}" if setting_desc else f"{value}"
+                    value,
+                    setting_desc
                 ])
 
-            config_table = write_table(config_table_list)
+            config_md_table = write_table(config_table_list, headers=["Setting", "Value", "Description"])
 
-            config_name = repo_data.get(
-                "displayName",
-                repo_data.get(
-                    "name",
-                    os.path.splitext(os.path.basename(filename))[0]
-                    .replace("_", " ")
-                    .title(),
-                ),
-            )
+            # Output file logic
+            config_name = repo_data.get("name", os.path.splitext(os.path.basename(filename))[0])
+            safe_config_name = re.sub(r'[<>:"/\\|?*]', "_", config_name)
             if split_per_config:
-                safe_config_name = re.sub(
-                    r'[<>:"/\\|?*]', "_", config_name
-                )
                 if not os.path.exists(f"{configpath}/docs"):
                     os.makedirs(f"{configpath}/docs")
-                config_outpath = os.path.join(
-                    f"{configpath}/docs", f"{safe_config_name}.md"
-                )
+                config_outpath = os.path.join(f"{configpath}/docs", f"{safe_config_name}.md")
                 md_file(config_outpath)
                 target_md = config_outpath
                 top_header = f"# {config_name}"
@@ -710,15 +717,16 @@ def document_settings_catalog(
                 target_md = outpath
                 top_header = f"### {config_name}"
 
+            # Write markdown
             with open(target_md, "a", encoding="utf-8") as md:
                 md.write(top_header + "\n")
-                if description:
-                    md.write(f"Description: {escape_markdown(description)}\n")
                 if assignments_table:
                     md.write("#### Assignments\n")
                     md.write(str(assignments_table) + "\n")
+                md.write("#### Basics\n")
+                md.write(str(basics_md_table) + "\n")
                 md.write("#### Configuration\n")
-                md.write(str(config_table) + "\n")
+                md.write(str(config_md_table) + "\n")
 
         except Exception as e:
             print(f"[DEBUG] Error processing {filename}: {type(e).__name__}: {e}")
