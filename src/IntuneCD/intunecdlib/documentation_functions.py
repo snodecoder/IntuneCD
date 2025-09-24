@@ -600,6 +600,45 @@ def get_md_files(configpath):
     return md_files
 
 
+def extract_setting_instances(setting_instance, settings_lookup, categories_lookup, max_length):
+    """
+    Recursively extract setting instances and return a list of [Setting, Value, Description] rows.
+    """
+    rows = []
+    definition_id = setting_instance.get("settingDefinitionId")
+    enriched = settings_lookup.get(definition_id, {})
+    setting_name = enriched.get("displayName", definition_id)
+    setting_desc = enriched.get("description", "")
+    category_id = enriched.get("categoryId")
+    category_name = categories_lookup.get(category_id, {}).get("displayName", "")
+
+    # Extract value
+    value = ""
+    if "choiceSettingValue" in setting_instance:
+        raw_value = setting_instance["choiceSettingValue"].get("value", "")
+        # If the value matches a definitionId in settings_lookup, use its displayName
+        display_value = settings_lookup.get(raw_value, {}).get("displayName")
+        value = display_value if display_value else raw_value
+        # Recursively process children
+        children = setting_instance["choiceSettingValue"].get("children", [])
+        for child in children:
+            rows += extract_setting_instances(child, settings_lookup, categories_lookup, max_length)
+    elif "simpleSettingValue" in setting_instance:
+        value = setting_instance["simpleSettingValue"].get("value", "")
+    elif "collectionSettingValue" in setting_instance:
+        value = str(setting_instance["collectionSettingValue"].get("values", ""))
+
+    if max_length and isinstance(value, str) and len(value) > max_length:
+        value = "Value too long to display"
+
+    rows.append([
+        f"{setting_name} ({category_name})",
+        value,
+        setting_desc
+    ])
+    return rows
+
+
 def document_settings_catalog(
     configpath,
     outpath,
@@ -667,35 +706,11 @@ def document_settings_catalog(
 
             # Configuration Table
             config_table_list = []
-
-            # Enrich settings
             for setting in repo_data.get("settings", []):
-                # Extract settingDefinitionId
                 setting_instance = setting.get("settingInstance", {})
-                definition_id = setting_instance.get("settingDefinitionId")
-                enriched = settings_lookup.get(definition_id, {})
-                setting_name = enriched.get("displayName", definition_id)
-                setting_desc = enriched.get("description", "")
-                category_id = enriched.get("categoryId")
-                category_name = categories_lookup.get(category_id, {}).get("displayName", "")
-
-                # Extract value
-                value = ""
-                if "choiceSettingValue" in setting_instance:
-                    value = setting_instance["choiceSettingValue"].get("value", "")
-                elif "simpleSettingValue" in setting_instance:
-                    value = setting_instance["simpleSettingValue"].get("value", "")
-                elif "collectionSettingValue" in setting_instance:
-                    value = str(setting_instance["collectionSettingValue"].get("values", ""))
-
-                if max_length and isinstance(value, str) and len(value) > max_length:
-                    value = "Value too long to display"
-
-                config_table_list.append([
-                    f"{setting_name} ({category_name})",
-                    value,
-                    setting_desc
-                ])
+                config_table_list += extract_setting_instances(
+                    setting_instance, settings_lookup, categories_lookup, max_length
+                )
 
             config_md_table = write_table(config_table_list, headers=["Setting", "Value", "Description"])
 
