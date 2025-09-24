@@ -617,14 +617,22 @@ def extract_setting_instances(setting_instance, settings_lookup, categories_look
     if "choiceSettingValue" in setting_instance:
         raw_value = setting_instance["choiceSettingValue"].get("value", "")
         # If the value matches a definitionId in settings_lookup, use its displayName
-        display_value = settings_lookup.get(raw_value, {}).get("displayName")
-        value = display_value if display_value else raw_value
+        if raw_value in settings_lookup:
+            display_value = settings_lookup[raw_value].get("displayName", raw_value)
+            value = display_value
+        else:
+            value = raw_value
         # Recursively process children
         children = setting_instance["choiceSettingValue"].get("children", [])
         for child in children:
             rows += extract_setting_instances(child, settings_lookup, categories_lookup, max_length)
     elif "simpleSettingValue" in setting_instance:
-        value = setting_instance["simpleSettingValue"].get("value", "")
+        raw_value = setting_instance["simpleSettingValue"].get("value", "")
+
+        if raw_value in settings_lookup:
+            value = settings_lookup[raw_value].get("displayName", raw_value)
+        else:
+            value = raw_value
     elif "collectionSettingValue" in setting_instance:
         value = str(setting_instance["collectionSettingValue"].get("values", ""))
 
