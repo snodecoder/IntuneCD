@@ -15,6 +15,7 @@ import re
 
 import yaml
 from pytablewriter import MarkdownTableWriter
+from collections import defaultdict
 
 
 def md_file(outpath):
@@ -599,6 +600,138 @@ def get_md_files(configpath):
 
     return md_files
 
+    """
+    Extract the value from a setting instance, including children values.
+
+    :param setting_instance: The setting instance object
+    :return: Formatted setting value or list of child values
+    """
+    if "simpleSettingValue" in setting_instance:
+        value = setting_instance["simpleSettingValue"].get("value", "")
+        return value if value != "" else "Not configured"
+    elif "choiceSettingValue" in setting_instance:
+        choice_value_obj = setting_instance["choiceSettingValue"]
+
+        # Check if there are children with actual values
+        if "children" in choice_value_obj and choice_value_obj["children"]:
+            child_values = []
+            for child in choice_value_obj["children"]:
+                child_value = _extract_setting_value(child)
+                if child_value and child_value != "Not configured" and child_value != "":
+                    child_values.append(child_value)
+
+            # If we found child values, return them; otherwise fall back to choice value
+            if child_values:
+                return child_values if len(child_values) > 1 else child_values[0]
+
+        # Fallback to choice value
+        choice_value = choice_value_obj.get("value", "")
+        if choice_value:
+            # Try to extract meaningful part from choice value
+            if "_" in choice_value:
+                parts = choice_value.split("_")
+                if len(parts) > 1:
+                    meaningful_part = parts[-1]
+                    # Return the meaningful part, but only if it's not just "selected"
+                    if meaningful_part.lower() not in ["selected", "enabled", "disabled"]:
+                        return meaningful_part.title()
+            return choice_value
+        return "Not configured"
+    elif "groupSettingCollectionValue" in setting_instance:
+        collection = setting_instance["groupSettingCollectionValue"]
+        if isinstance(collection, list) and len(collection) > 0:
+            extracted = []
+            for item in collection:
+                # If the item has children, extract their values
+                if "children" in item and item["children"]:
+                    child_values = []
+                    for child in item["children"]:
+                        child_value = _extract_setting_value(child)
+                        if child_value and child_value != "Not configured" and child_value != "":
+                            child_values.append(child_value)
+                    if child_values:
+                        # If only one value, don't wrap in list
+                        extracted.append(child_values if len(child_values) > 1 else child_values[0])
+                else:
+                    # Fallback: try to extract value directly
+                    value = item.get("value", None)
+                    if value:
+                        extracted.append(value)
+            # Flatten if only one item
+            if len(extracted) == 1:
+                return extracted[0]
+            return extracted if extracted else "Not configured"
+        return "Collection value"
+
+    return "Not configured"
+
+
+def sanitize_text(text):
+    if not isinstance(text, str):
+        return text
+
+    # Remove extra spaces and newlines
+    text = re.sub(r'[ \t]+', ' ', text)
+    text = re.sub(r'[\r\n]+', '\n', text)
+    # Remove non-printable/control characters
+    text = re.sub(r'[^\x20-\x7E\n]', '', text)
+    return text.strip()
+
+
+def extract_setting(setting_instance, settings_lookup):
+    setting_definition_id = setting_instance.get("settingDefinitionId", "")
+    definition = settings_lookup.get(setting_definition_id)
+    display_name = definition.get("displayName", setting_definition_id)
+    description = sanitize_text(definition.get("description", ""))
+    description = escape_markdown(description)
+
+    if "simpleSettingValue" in setting_instance:
+        value = setting_instance["simpleSettingValue"].get("value", "")
+        formatted_value = value if value != "" else "Not configured"
+        return [[display_name, formatted_value, description]]
+
+    elif "simpleSettingCollectionValue" in setting_instance:
+        collection = setting_instance["simpleSettingCollectionValue"]
+        if isinstance(collection, list) and collection:
+            values = []
+            for item in collection:
+                val = item.get("value", "")
+                if val != "":
+                    values.append(str(val))
+            formatted_value = value if value != "" else "Not configured"
+            return [[display_name, formatted_value, description]]
+        else:
+            return [[display_name, "Not configured", description]]
+
+    elif "choiceSettingValue" in setting_instance:
+        choice_value_obj = setting_instance["choiceSettingValue"]
+        value = choice_value_obj.get("value", "")
+        children = choice_value_obj.get("children", [])
+        option_display_name = None
+        if value and "options" in definition:
+            for option in definition["options"]:
+                if option.get("value") == value or option.get("itemId") == value:
+                    option_display_name = option.get("displayName") or option.get("name")
+                    break
+        formatted_value = option_display_name if option_display_name else (value if value else "Not configured")
+        rows = []
+        rows.append([display_name, formatted_value, description])
+        for child in children:
+            rows.extend(extract_setting(child, settings_lookup))
+        return rows
+
+    elif "groupSettingCollectionValue" in setting_instance:
+        collection = setting_instance["groupSettingCollectionValue"]
+        rows = []
+        if isinstance(collection, list):
+            for item in collection:
+                children = item.get("children", [])
+                for child in children:
+                    rows.extend(extract_setting(child, settings_lookup))
+        return rows if rows else [[display_name, "Collection value", description]]
+
+    return [[display_name, "Not configured", description]]
+
 
 def document_settings_catalog(
     configpath,
@@ -609,11 +742,22 @@ def document_settings_catalog(
     cleanup,
     decode,
     split_per_config,
-    configuration_settings=None,
-    configuration_categories=None,
+    settings_lookup=None,
+    categories_lookup=None,
 ):
     """
-    Documents Settings Catalog configurations, enriched with configurationSettings and configurationCategories.
+    Documents Settings Catalog configurations, enriched with configurationSettings and configurationCategories. This function is only started when enrichment is enabled.
+
+    :param configpath: Path to backup files
+    :param outpath: Base path for Markdown output
+    :param header: Configuration type header (e.g., "AppConfigurations")
+    :param max_length: Max length for displayed values
+    :param split: Split into one file per type
+    :param cleanup: Remove empty values
+    :param decode: Decode base64 values
+    :param split_per_config: Split into one file per individual config
+    :param settings_lookup: Lookup dictionary for configurationSettings
+    :param categories_lookup: Lookup dictionary for configurationCategories
     """
     if not os.path.exists(configpath):
         return
@@ -631,17 +775,6 @@ def document_settings_catalog(
     files = sorted(glob.glob(pattern, recursive=True), key=str.casefold)
     if not files:
         return
-
-    # Build lookup dictionaries for enrichment
-    settings_lookup = {}
-    categories_lookup = {}
-
-    if configuration_settings:
-        for s in configuration_settings.get("value", []):
-            settings_lookup[s.get("id")] = s
-    if configuration_categories:
-        for c in configuration_categories.get("value", []):
-            categories_lookup[c.get("id")] = c
 
     for filename in files:
         if filename.endswith(".md") or os.path.isdir(filename):
@@ -668,36 +801,34 @@ def document_settings_catalog(
             # Configuration Table
             config_table_list = []
 
-            # Enrich settings
             for setting in repo_data.get("settings", []):
-                # Extract settingDefinitionId
-                setting_instance = setting.get("settingInstance", {})
-                definition_id = setting_instance.get("settingDefinitionId")
-                enriched = settings_lookup.get(definition_id, {})
-                setting_name = enriched.get("displayName", definition_id)
-                setting_desc = enriched.get("description", "")
-                category_id = enriched.get("categoryId")
-                category_name = categories_lookup.get(category_id, {}).get("displayName", "")
+                rows = extract_setting(setting.get("settingInstance", {}), settings_lookup)
+                for row in rows:
+                    setting_definition_id = setting.get("settingInstance", {}).get("settingDefinitionId", "")
+                    definition = settings_lookup.get(setting_definition_id, {})
+                    category_id = definition.get("categoryId", "")
+                    category_name = categories_lookup.get(category_id, {}).get("displayName", "")
+                    root_category_id = categories_lookup.get(category_id, {}).get("rootCategoryId", "")
+                    root_category_name = categories_lookup.get(root_category_id, {}).get("displayName", "")
+                    config_table_list.append({
+                        "setting_name": row[0],
+                        "formatted_value": row[1],
+                        "description": row[2],
+                        "category_name": category_name,
+                        "root_category_name": root_category_name
+                    })
 
-                # Extract value
-                value = ""
-                if "choiceSettingValue" in setting_instance:
-                    value = setting_instance["choiceSettingValue"].get("value", "")
-                elif "simpleSettingValue" in setting_instance:
-                    value = setting_instance["simpleSettingValue"].get("value", "")
-                elif "collectionSettingValue" in setting_instance:
-                    value = str(setting_instance["collectionSettingValue"].get("values", ""))
+            # Sort by category_name, then root_category_name
+            config_table_list_sorted = sorted(
+                config_table_list,
+                key=lambda x: (x["root_category_name"], x["category_name"])
+            )
 
-                if max_length and isinstance(value, str) and len(value) > max_length:
-                    value = "Value too long to display"
+            # Group items by root_category_name and category_name
+            grouped = defaultdict(lambda: defaultdict(list))
+            for item in config_table_list_sorted:
+                grouped[item["root_category_name"]][item["category_name"]].append(item)
 
-                config_table_list.append([
-                    f"{setting_name} ({category_name})",
-                    value,
-                    setting_desc
-                ])
-
-            config_md_table = write_table(config_table_list, headers=["Setting", "Value", "Description"])
 
             # Output file logic
             config_name = repo_data.get("name", os.path.splitext(os.path.basename(filename))[0])
@@ -726,7 +857,19 @@ def document_settings_catalog(
                 md.write("#### Basics\n")
                 md.write(str(basics_md_table) + "\n")
                 md.write("#### Configuration\n")
-                md.write(str(config_md_table) + "\n")
+
+                # Write grouped tables
+                for root_cat, categories in grouped.items():
+                    md.write(f"\n#### {root_cat}\n")
+                    for cat, items in categories.items():
+                        md.write(f"\n##### {cat}\n")
+                        # Prepare table data for this category
+                        table_data = [
+                            [i["setting_name"], i["formatted_value"], i["description"]]
+                            for i in items
+                        ]
+                        table_md = write_table(table_data, headers=["Setting", "Value", "Description"])
+                        md.write(str(table_md) + "\n")
 
         except Exception as e:
             print(f"[DEBUG] Error processing {filename}: {type(e).__name__}: {e}")
