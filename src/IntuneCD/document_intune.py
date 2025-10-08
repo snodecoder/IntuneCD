@@ -21,7 +21,7 @@ def document_intune(
     decode,
     split_per_config,
     max_workers,
-    enrich=False,  # <-- add this
+    enrich=False,
 ):
     """
     This function is used to document Intune configuration using threading.
@@ -34,6 +34,7 @@ def document_intune(
     :param decode: Decode base64 values
     :param split_per_config: Whether to split each config into its own Markdown file
     :param max_workers: Maximum number of concurrent threads
+    :param enrich: Whether to enrich Settings Catalog documentation with additional details
     """
 
     # Ensure the output directory exists
@@ -81,24 +82,33 @@ def document_intune(
     # sort doc_tasks alphabetically
     doc_tasks = sorted(doc_tasks, key=lambda x: x[1])
 
-    configuration_settings = None
-    configuration_categories = None
+    settings_lookup = None
+    categories_lookup = None
 
     if enrich:
         settings_path = os.path.join(configpath, "configurationSettings.json")
         categories_path = os.path.join(configpath, "configurationCategories.json")
         if os.path.exists(settings_path):
             with open(settings_path, "r", encoding="utf-8") as f:
-                configuration_settings = json.load(f)
+                settings_json = json.load(f)
         if os.path.exists(categories_path):
             with open(categories_path, "r", encoding="utf-8") as f:
-                configuration_categories = json.load(f)
+                categories_json = json.load(f)
+
+        # Build lookup dictionaries for enrichment
+        if settings_json:
+            for s in settings_json.get("value", []):
+                settings_lookup[s.get("id")] = s
+        if categories_json:
+            for c in categories_json.get("value", []):
+                categories_lookup[c.get("id")] = c
 
     if split or split_per_config:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {}
             for task in doc_tasks:
-                if task[1] == "Settings Catalog":
+                # Submit Settings Catalog with enrichment if enabled
+                if task[1] == "Settings Catalog" and enrich:
                     futures[executor.submit(
                         document_settings_catalog,
                         f"{configpath}/{task[0]}",
@@ -109,8 +119,8 @@ def document_intune(
                         cleanup,
                         decode,
                         split_per_config,
-                        configuration_settings,
-                        configuration_categories,
+                        settings_lookup,
+                        categories_lookup,
                     )] = task[1]
                 else:
                     futures[executor.submit(
@@ -145,8 +155,8 @@ def document_intune(
                     cleanup,
                     decode,
                     split_per_config,
-                    configuration_settings,
-                    configuration_categories,
+                    settings_lookup,
+                    categories_lookup,
                 )
             else:
                 document_configs(
