@@ -41,6 +41,7 @@ def write_table(data, headers=None):
         headers=headers if headers else ["setting", "value"],
         value_matrix=data,
     )
+    writer.is_padding = False
 
     return writer
 
