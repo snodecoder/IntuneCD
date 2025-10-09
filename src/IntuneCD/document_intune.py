@@ -21,7 +21,7 @@ def document_intune(
     decode,
     split_per_config,
     max_workers,
-    enrich=False,
+    enrich_documentation=False,
 ):
     """
     This function is used to document Intune configuration using threading.
@@ -34,7 +34,7 @@ def document_intune(
     :param decode: Decode base64 values
     :param split_per_config: Whether to split each config into its own Markdown file
     :param max_workers: Maximum number of concurrent threads
-    :param enrich: Whether to enrich Settings Catalog documentation with additional details
+    :param enrich_documentation: Whether to enrich Settings Catalog documentation with additional details
     """
 
     # Ensure the output directory exists
@@ -85,7 +85,7 @@ def document_intune(
     settings_lookup = None
     categories_lookup = None
 
-    if enrich:
+    if enrich_documentation:
         settings_lookup = {}
         categories_lookup = {}
 
@@ -111,7 +111,7 @@ def document_intune(
             futures = {}
             for task in doc_tasks:
                 # Submit Settings Catalog with enrichment if enabled
-                if task[1] == "Settings Catalog" and enrich:
+                if task[1] == "Settings Catalog" and enrich_documentation:
                     futures[executor.submit(
                         document_settings_catalog,
                         f"{configpath}/{task[0]}",
@@ -148,7 +148,8 @@ def document_intune(
     else:
         # Run sequentially if split options are disabled
         for task in doc_tasks:
-            if task[1] == "Settings Catalog":
+            # Submit Settings Catalog with enrichment if enabled
+            if task[1] == "Settings Catalog" and enrich_documentation:
                 document_settings_catalog(
                     f"{configpath}/{task[0]}",
                     outpath,

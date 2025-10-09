@@ -12,7 +12,6 @@ import json
 import os
 import platform
 import re
-
 import yaml
 from pytablewriter import MarkdownTableWriter
 from collections import defaultdict
@@ -600,85 +599,26 @@ def get_md_files(configpath):
 
     return md_files
 
-    """
-    Extract the value from a setting instance, including children values.
-
-    :param setting_instance: The setting instance object
-    :return: Formatted setting value or list of child values
-    """
-    if "simpleSettingValue" in setting_instance:
-        value = setting_instance["simpleSettingValue"].get("value", "")
-        return value if value != "" else "Not configured"
-    elif "choiceSettingValue" in setting_instance:
-        choice_value_obj = setting_instance["choiceSettingValue"]
-
-        # Check if there are children with actual values
-        if "children" in choice_value_obj and choice_value_obj["children"]:
-            child_values = []
-            for child in choice_value_obj["children"]:
-                child_value = _extract_setting_value(child)
-                if child_value and child_value != "Not configured" and child_value != "":
-                    child_values.append(child_value)
-
-            # If we found child values, return them; otherwise fall back to choice value
-            if child_values:
-                return child_values if len(child_values) > 1 else child_values[0]
-
-        # Fallback to choice value
-        choice_value = choice_value_obj.get("value", "")
-        if choice_value:
-            # Try to extract meaningful part from choice value
-            if "_" in choice_value:
-                parts = choice_value.split("_")
-                if len(parts) > 1:
-                    meaningful_part = parts[-1]
-                    # Return the meaningful part, but only if it's not just "selected"
-                    if meaningful_part.lower() not in ["selected", "enabled", "disabled"]:
-                        return meaningful_part.title()
-            return choice_value
-        return "Not configured"
-    elif "groupSettingCollectionValue" in setting_instance:
-        collection = setting_instance["groupSettingCollectionValue"]
-        if isinstance(collection, list) and len(collection) > 0:
-            extracted = []
-            for item in collection:
-                # If the item has children, extract their values
-                if "children" in item and item["children"]:
-                    child_values = []
-                    for child in item["children"]:
-                        child_value = _extract_setting_value(child)
-                        if child_value and child_value != "Not configured" and child_value != "":
-                            child_values.append(child_value)
-                    if child_values:
-                        # If only one value, don't wrap in list
-                        extracted.append(child_values if len(child_values) > 1 else child_values[0])
-                else:
-                    # Fallback: try to extract value directly
-                    value = item.get("value", None)
-                    if value:
-                        extracted.append(value)
-            # Flatten if only one item
-            if len(extracted) == 1:
-                return extracted[0]
-            return extracted if extracted else "Not configured"
-        return "Collection value"
-
-    return "Not configured"
-
 
 def sanitize_text(text):
-    if not isinstance(text, str):
-        return text
-
-    # Remove extra spaces and newlines
+    """
+    Sanitizes the input text by removing extra spaces, newlines, and non-printable/control characters.
+    :param text: The text to be sanitized
+    :return: The sanitized text
+    """
     text = re.sub(r'[ \t]+', ' ', text)
     text = re.sub(r'[\r\n]+', '\n', text)
-    # Remove non-printable/control characters
     text = re.sub(r'[^\x20-\x7E\n]', '', text)
     return text.strip()
 
 
 def extract_setting(setting_instance, settings_lookup):
+    """
+    Extracts setting information from a setting instance using the provided settings lookup.
+    :param setting_instance: The setting instance dictionary
+    :param settings_lookup: The settings lookup dictionary
+    :return: A list of lists containing setting name, formatted value, and description
+    """
     setting_definition_id = setting_instance.get("settingDefinitionId", "")
     definition = settings_lookup.get(setting_definition_id)
     display_name = definition.get("displayName", setting_definition_id)
@@ -746,7 +686,7 @@ def document_settings_catalog(
     categories_lookup=None,
 ):
     """
-    Documents Settings Catalog configurations, enriched with configurationSettings and configurationCategories. This function is only started when enrichment is enabled.
+    Documents Settings Catalog configurations, enriched with configurationSettings and configurationCategories. This function is only started when backup and documentation are started with --enrich-documentation.
 
     :param configpath: Path to backup files
     :param outpath: Base path for Markdown output
@@ -860,16 +800,18 @@ def document_settings_catalog(
 
                 # Write grouped tables
                 for root_cat, categories in grouped.items():
-                    md.write(f"\n#### {root_cat}\n")
+                    # Start a new table for each root_cat
+                    table_data = []
+                    # Add root_cat row (bold, only in Setting column)
+                    table_data.append([f"**{root_cat}**", "", ""])
                     for cat, items in categories.items():
-                        md.write(f"\n##### {cat}\n")
-                        # Prepare table data for this category
-                        table_data = [
-                            [i["setting_name"], i["formatted_value"], i["description"]]
-                            for i in items
-                        ]
-                        table_md = write_table(table_data, headers=["Setting", "Value", "Description"])
-                        md.write(str(table_md) + "\n")
+                        # Add cat row (bold, only in Setting column)
+                        table_data.append([f"**{cat}**", "", ""])
+                        # Add item rows
+                        for i in items:
+                            table_data.append([i["setting_name"], i["formatted_value"], i["description"]])
+                    table_md = write_table(table_data, headers=["Setting", "Value", "Description"])
+                    md.write(str(table_md) + "\n")
 
         except Exception as e:
             print(f"[DEBUG] Error processing {filename}: {type(e).__name__}: {e}")

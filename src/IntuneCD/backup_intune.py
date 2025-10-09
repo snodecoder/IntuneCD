@@ -39,7 +39,7 @@ def backup_intune(
     args,
     max_workers,
     platforms,
-    enrich=False,  # <-- add enrich parameter
+    enrich_documentation=False,
 ):
     """
     Imports all the backup functions dynamically and runs them in parallel.
@@ -67,8 +67,8 @@ def backup_intune(
         "platforms": platforms,
     }
 
-    # Enrich data if the enrich flag is set
-    if enrich:
+    # Enrich data if the --enrich-documentation flag is set
+    if enrich_documentation:
         from .intunecdlib.BaseGraphModule import BaseGraphModule
         import os
         import json
