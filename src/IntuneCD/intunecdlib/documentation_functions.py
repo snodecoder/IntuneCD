@@ -620,10 +620,17 @@ def extract_setting(setting_instance, settings_lookup):
     """
     setting_definition_id = setting_instance.get("settingDefinitionId", "")
     definition = settings_lookup.get(setting_definition_id)
+    root_definition_id = definition.get("rootDefinitionId") if definition else None
     display_name = definition.get("displayName", setting_definition_id)
+
+    # Indent sub-settings
+    if root_definition_id and root_definition_id != setting_definition_id:
+        display_name = f"→ {display_name}"
+
     description = sanitize_text(definition.get("description", ""))
     description = escape_markdown(description)
     description = f"<details>{description}</details>" if description else ""
+
 
     if "simpleSettingValue" in setting_instance:
         value = setting_instance["simpleSettingValue"].get("value", "")
@@ -800,15 +807,16 @@ def document_settings_catalog(
 
                 # Write grouped tables
                 for root_cat, categories in grouped.items():
-                    # Start a new table for each root_cat
                     table_data = []
                     for cat, items in categories.items():
-                        table_data.append([f"**{root_cat}** > **{cat}**", "", ""])
-                        # Add item rows
+                        if cat == root_cat:
+                            table_data.append([f"**{root_cat}**", "", ""])
+                        else:
+                            table_data.append([f"**{root_cat}** > **{cat}**", "", ""])
                         for i in items:
                             table_data.append([i["setting_name"], i["formatted_value"], i["description"]])
-                table_md = write_table(table_data, headers=["Setting", "Value", "Description"])
-                md.write(str(table_md) + "\n")
+                    table_md = write_table(table_data, headers=["Setting", "Value", "Description"])
+                    md.write(str(table_md) + "\n")
 
         except Exception as e:
             print(f"[DEBUG] Error processing {filename}: {type(e).__name__}: {e}")
