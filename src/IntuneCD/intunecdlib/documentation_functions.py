@@ -816,8 +816,8 @@ def document_settings_catalog(
                             table_data.append([f"**{root_cat}** > **{cat}**", "", ""])
                         for i in items:
                             table_data.append([i["setting_name"], i["formatted_value"], i["description"]])
-                    table_md = write_table(table_data, headers=["Setting", "Value", "Description"])
-                    md.write(str(table_md) + "\n")
+                table_md = write_table(table_data, headers=["Setting", "Value", "Description"])
+                md.write(str(table_md) + "\n")
 
         except Exception as e:
             print(f"[DEBUG] Error processing {filename}: {type(e).__name__}: {e}")
