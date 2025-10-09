@@ -36,12 +36,14 @@ def write_table(data, headers=None):
     :param data: The data to be written to the table
     :return: The Markdown table writer
     """
-    writer = MarkdownTableWriter(
-        headers=headers if headers else ["setting", "value"],
-        value_matrix=data,
-    )
+    headers=headers if headers else ["setting", "value"]
 
-    return writer
+    header = "| " + " | ".join(headers) + " |"
+    separator = "| " + " | ".join(["---------------"] * len(headers)) + " |"
+    body = "\n".join("| " + " | ".join(map(str, r)) + " |" for r in data)
+
+    return "\n".join([header, separator, body])
+
 
 
 def escape_markdown(text):
@@ -803,12 +805,12 @@ def document_settings_catalog(
                     # Start a new table for each root_cat
                     table_data = []
                     for cat, items in categories.items():
-                        table_data.append([f"**{root_cat}**", f"**>{cat}**", ""])
+                        table_data.append([f"**{root_cat}** > **{cat}**", "", ""])
                         # Add item rows
                         for i in items:
                             table_data.append([i["setting_name"], i["formatted_value"], i["description"]])
-                    table_md = write_table(table_data, headers=["Setting", "Value", "Description"])
-                    md.write(str(table_md) + "\n")
+                table_md = write_table(table_data, headers=["Setting", "Value", "Description"])
+                md.write(str(table_md) + "\n")
 
         except Exception as e:
             print(f"[DEBUG] Error processing {filename}: {type(e).__name__}: {e}")
