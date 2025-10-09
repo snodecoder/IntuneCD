@@ -46,16 +46,49 @@ def write_table(data, headers=None):
 
 def escape_markdown(text):
     """
-    This function escapes markdown characters.
+    Escapes markdown characters except inside http/https links.
 
     :param text: The text to be escaped
     :return: The escaped text
     """
+    # Regex to match http/https links
+    link_pattern = re.compile(r'(https?://[^\s\)\]\}]+)')
+    parts = []
+    last_end = 0
+    for match in link_pattern.finditer(text):
+        # Escape markdown in text before the link
+        before = text[last_end:match.start()]
+        escaped = re.sub(r"([\_*\[\]()\{\}`>\#\+\-=|\.!])", r"\\\1", before)
+        parts.append(escaped)
+        # Add the link unescaped
+        parts.append(match.group(0))
+        last_end = match.end()
+    # Escape markdown in the remaining text
+    after = text[last_end:]
+    escaped_after = re.sub(r"([\_*\[\]()\{\}`>\#\+\-=|\.!])", r"\\\1", after)
+    parts.append(escaped_after)
+    return ''.join(parts)
 
-    # Escape markdown characters
-    parse = re.sub(r"([\_*\[\]()\{\}`>\#\+\-=|\.!])", r"\\\1", text)
 
-    return parse
+def sanitize_text(text):
+    """
+    Sanitizes the input text by removing extra spaces, newlines, and non-printable/control characters.
+    :param text: The text to be sanitized
+    :return: The sanitized text
+    """
+    text = re.sub(r'[ \t]+', ' ', text)
+    text = re.sub(r'[\r\n]+', '\n', text)
+    text = re.sub(r'[^\x20-\x7E\n]', '', text)
+    return text.strip()
+
+
+def convert_newlines_to_br(text):
+    """
+    Converts any newline characters in the text to <br>.
+    :param text: The input text
+    :return: Text with newlines replaced by <br>
+    """
+    return text.replace('\n', '<br>')
 
 
 def assignment_table(data):
@@ -597,18 +630,6 @@ def get_md_files(configpath):
     md_files.sort(key=lambda f: os.path.splitext(os.path.basename(f))[0].lower())
 
     return md_files
-
-
-def sanitize_text(text):
-    """
-    Sanitizes the input text by removing extra spaces, newlines, and non-printable/control characters.
-    :param text: The text to be sanitized
-    :return: The sanitized text
-    """
-    text = re.sub(r'[ \t]+', ' ', text)
-    text = re.sub(r'[\r\n]+', '\n', text)
-    text = re.sub(r'[^\x20-\x7E\n]', '', text)
-    return text.strip()
 
 
 def extract_setting(setting_instance, settings_lookup):
