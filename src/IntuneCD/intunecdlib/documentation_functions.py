@@ -42,6 +42,7 @@ def write_table(data, headers=None):
         value_matrix=data,
     )
     writer.is_padding = False
+    writer.margin = 1
 
     return writer
 
@@ -625,6 +626,7 @@ def extract_setting(setting_instance, settings_lookup):
     display_name = definition.get("displayName", setting_definition_id)
     description = sanitize_text(definition.get("description", ""))
     description = escape_markdown(description)
+    description = f"<details>{description}</details>" if description else ""
 
     if "simpleSettingValue" in setting_instance:
         value = setting_instance["simpleSettingValue"].get("value", "")
@@ -803,11 +805,8 @@ def document_settings_catalog(
                 for root_cat, categories in grouped.items():
                     # Start a new table for each root_cat
                     table_data = []
-                    # Add root_cat row (bold, only in Setting column)
-                    table_data.append([f"**{root_cat}**", "", ""])
                     for cat, items in categories.items():
-                        # Add cat row (bold, only in Setting column)
-                        table_data.append([f"**{cat}**", "", ""])
+                        table_data.append([f"**{root_cat}**", "** > {cat}**", ""])
                         # Add item rows
                         for i in items:
                             table_data.append([i["setting_name"], i["formatted_value"], i["description"]])
