@@ -806,8 +806,9 @@ def document_settings_catalog(
                 md.write("#### Configuration\n")
 
                 # Write grouped tables
+                table_data = []
                 for root_cat, categories in grouped.items():
-                    table_data = []
+
                     for cat, items in categories.items():
                         if cat == root_cat:
                             table_data.append([f"**{root_cat}**", "", ""])
