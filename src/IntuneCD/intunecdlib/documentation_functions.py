@@ -650,6 +650,7 @@ def extract_setting(setting_instance, settings_lookup):
 
     description = sanitize_text(definition.get("description", ""))
     description = escape_markdown(description)
+    description = convert_newlines_to_br(description)
     description = f"<details>{description}</details>" if description else ""
 
 
