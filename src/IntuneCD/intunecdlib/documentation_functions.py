@@ -36,14 +36,12 @@ def write_table(data, headers=None):
     :param data: The data to be written to the table
     :return: The Markdown table writer
     """
-    headers=headers if headers else ["setting", "value"]
+    writer = MarkdownTableWriter(
+        headers=headers if headers else ["setting", "value"],
+        value_matrix=data,
+    )
 
-    header = "| " + " | ".join(headers) + " |"
-    separator = "| " + " | ".join(["---------------"] * len(headers)) + " |"
-    body = "\n".join("| " + " | ".join(map(str, r)) + " |" for r in data)
-
-    return "\n".join([header, separator, body])
-
+    return writer
 
 
 def escape_markdown(text):
