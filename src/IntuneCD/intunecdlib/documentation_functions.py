@@ -38,7 +38,7 @@ def write_table(data, headers=None):
     """
     writer = MarkdownTableWriter(
         headers=headers if headers else ["setting", "value"],
-        value_matrix=cleaned_data,
+        value_matrix=data,
     )
 
     return writer
