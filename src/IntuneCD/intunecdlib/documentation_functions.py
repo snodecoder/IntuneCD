@@ -267,7 +267,7 @@ def clean_list(data, decode):
         else:
             values.append(item)
 
-    return values
+    return escape_markdown(values)
 
 
 def write_type_header(split, outpath, header):
