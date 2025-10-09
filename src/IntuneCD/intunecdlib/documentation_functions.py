@@ -806,7 +806,7 @@ def document_settings_catalog(
                     # Start a new table for each root_cat
                     table_data = []
                     for cat, items in categories.items():
-                        table_data.append([f"**{root_cat}**", "** > {cat}**", ""])
+                        table_data.append([f"**{root_cat}**", f"**>{cat}**", ""])
                         # Add item rows
                         for i in items:
                             table_data.append([i["setting_name"], i["formatted_value"], i["description"]])
