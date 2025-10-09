@@ -36,13 +36,10 @@ def write_table(data, headers=None):
     :param data: The data to be written to the table
     :return: The Markdown table writer
     """
-
     writer = MarkdownTableWriter(
         headers=headers if headers else ["setting", "value"],
-        value_matrix=data,
+        value_matrix=cleaned_data,
     )
-    writer.is_padding = False
-    writer.margin = 1
 
     return writer
 
