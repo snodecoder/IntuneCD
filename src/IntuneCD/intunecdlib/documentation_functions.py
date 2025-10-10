@@ -642,16 +642,15 @@ def extract_setting(setting_instance, settings_lookup):
 
     def escape_backslash_for_md(value):
         """
-        Escapes backslashes in a string for Markdown formatting.
+        Escapes backslashes in a string for safe rendering in Markdown.
 
-        Only single backslashes preceding Markdown special characters are escaped.
-        Double backslashes are left as-is.
+        This function processes the input string to ensure that backslashes preceding Markdown special characters are properly escaped, preventing unintended formatting when rendered. It is recommended to pass the input as a raw string to avoid Python interpreting escape sequences.
 
         :param value: The input string to be processed, pass value as raw string:
             Example: escape_backslash_for_md(rf"{value}")
         """
         escapable = r"_*\[\](){}#`>+-=|.!"
-        value = re.sub(rf'(?<!\\)\\([{re.escape(escapable)}])', r'\\\\\1', value)
+        value = re.sub(rf'(?<!\\)\\([{re.escape(escapable)}])', r'\\\\\\\1', value)
         value = re.sub(rf'(?<!\\)\\(?![{re.escape(escapable)}])', r'\\\\', value)
         return value
 
