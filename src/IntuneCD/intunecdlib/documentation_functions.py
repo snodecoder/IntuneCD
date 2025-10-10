@@ -648,7 +648,11 @@ def extract_setting(setting_instance, settings_lookup):
     if root_definition_id and root_definition_id != setting_definition_id:
         display_name = f"→ {display_name}"
 
-    description = sanitize_text(definition.get("description", ""))
+    # Ensure description is a string
+    raw_description = definition.get("description", "")
+    if not isinstance(raw_description, str):
+        raw_description = str(raw_description) if raw_description is not None else ""
+    description = sanitize_text(raw_description)
     description = escape_markdown(description)
     description = convert_newlines_to_br(description)
     description = f"<details>{description}</details>" if description else ""
