@@ -664,10 +664,10 @@ def extract_setting(setting_instance, settings_lookup):
         if isinstance(collection, list) and collection:
             values = []
             for item in collection:
-                val = item.get("value", "")
-                if val != "":
-                    values.append(str(val))
-            formatted_value = value if value != "" else "Not configured"
+                value = item.get("value", "")
+                if value != "":
+                    values.append(str(value))
+            formatted_value = ", ".join(values) if values else "Not configured"
             return [[display_name, formatted_value, description]]
         else:
             return [[display_name, "Not configured", description]]
