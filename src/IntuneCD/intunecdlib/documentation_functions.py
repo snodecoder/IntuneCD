@@ -644,18 +644,15 @@ def extract_setting(setting_instance, settings_lookup):
         """
         Escapes backslashes in a string for Markdown formatting.
 
-        This function ensures that backslashes preceding Markdown special characters
-        are properly escaped to prevent unintended formatting. It handles cases where
-        a single or double backslash appears before escapable Markdown characters,
-        and further escapes backslashes not followed by such characters.
+        Only single backslashes preceding Markdown special characters are escaped.
+        Double backslashes are left as-is.
+
         :param value: The input string to be processed, pass value as raw string:
             Example: escape_backslash_for_md(rf"{value}")
-
         """
         escapable = r"_*\[\](){}#`>+-=|.!"
         value = re.sub(rf'(?<!\\)\\([{re.escape(escapable)}])', r'\\\\\1', value)
-        value = re.sub(rf'(\\\\)([{re.escape(escapable)}])', r'\\\\\2', value)
-        value = re.sub(rf'(\\\\)(?![{re.escape(escapable)}])', r'\\\\\\', value)
+        value = re.sub(rf'(?<!\\)\\(?![{re.escape(escapable)}])', r'\\\\', value)
         return value
 
     setting_definition_id = setting_instance.get("settingDefinitionId", "")
