@@ -639,6 +639,25 @@ def extract_setting(setting_instance, settings_lookup):
     :param settings_lookup: The settings lookup dictionary
     :return: A list of lists containing setting name, formatted value, and description
     """
+
+    def escape_backslash_for_md(value):
+        """
+        Escapes backslashes in a string for Markdown formatting.
+
+        This function ensures that backslashes preceding Markdown special characters
+        are properly escaped to prevent unintended formatting. It handles cases where
+        a single or double backslash appears before escapable Markdown characters,
+        and further escapes backslashes not followed by such characters.
+        :param value: The input string to be processed, pass value as raw string:
+            Example: escape_backslash_for_md(rf"{value}")
+
+        """
+        escapable = r"_*\[\](){}#`>+-=|.!"
+        value = re.sub(rf'(?<!\\)\\([{re.escape(escapable)}])', r'\\\\\1', value)
+        value = re.sub(rf'(\\\\)([{re.escape(escapable)}])', r'\\\\\2', value)
+        value = re.sub(rf'(\\\\)(?![{re.escape(escapable)}])', r'\\\\\\', value)
+        return value
+
     setting_definition_id = setting_instance.get("settingDefinitionId", "")
     definition = settings_lookup.get(setting_definition_id)
     root_definition_id = definition.get("rootDefinitionId") if definition else None
@@ -655,12 +674,11 @@ def extract_setting(setting_instance, settings_lookup):
     description = sanitize_text(raw_description)
     description = escape_markdown(description)
     description = convert_newlines_to_br(description)
-    description = f"<details>{description}</details>" if description else ""
-
+    description = f"<details><summary>Click to expand...</summary>{description}</details>" if description else ""
 
     if "simpleSettingValue" in setting_instance:
         value = setting_instance["simpleSettingValue"].get("value", "")
-        formatted_value = value if value != "" else "Not configured"
+        formatted_value = escape_backslash_for_md(rf"{value}") if value != "" else "Not configured"
         return [[display_name, formatted_value, description]]
 
     elif "simpleSettingCollectionValue" in setting_instance:
@@ -670,7 +688,7 @@ def extract_setting(setting_instance, settings_lookup):
             for item in collection:
                 value = item.get("value", "")
                 if value != "":
-                    values.append(str(value))
+                    values.append(str(escape_backslash_for_md(rf"{value}")))
             formatted_value = ", ".join(values) if values else "Not configured"
             return [[display_name, formatted_value, description]]
         else:
