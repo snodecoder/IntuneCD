@@ -34,6 +34,7 @@ def write_table(data, headers=None):
     This function creates the markdown table.
 
     :param data: The data to be written to the table
+    :param headers: The headers for the table
     :return: The Markdown table writer
     """
     writer = MarkdownTableWriter(
@@ -642,11 +643,9 @@ def extract_setting(setting_instance, settings_lookup):
 
     def escape_backslash_for_md(value):
         """
-        Escapes backslashes in a string for safe rendering in Markdown.
-
         This function processes the input string to ensure that backslashes preceding Markdown special characters are properly escaped, preventing unintended formatting when rendered. It is recommended to pass the input as a raw string to avoid Python interpreting escape sequences.
-
         :param value: The input string to be processed, pass value as raw string: Example: escape_backslash_for_md(rf"{value}")
+        :return: The processed string with backslashes properly escaped for Markdown
         """
         escapable = r"_*\[\](){}#`>+-=|.!"
         value = re.sub(rf'(?<!\\)\\([{re.escape(escapable)}])', r'\\\\\\\1', value)
@@ -730,8 +729,6 @@ def document_settings_catalog(
     header,
     max_length,
     split,
-    cleanup,
-    decode,
     split_per_config,
     settings_lookup=None,
     categories_lookup=None,
@@ -744,8 +741,6 @@ def document_settings_catalog(
     :param header: Configuration type header (e.g., "AppConfigurations")
     :param max_length: Max length for displayed values
     :param split: Split into one file per type
-    :param cleanup: Remove empty values
-    :param decode: Decode base64 values
     :param split_per_config: Split into one file per individual config
     :param settings_lookup: Lookup dictionary for configurationSettings
     :param categories_lookup: Lookup dictionary for configurationCategories
@@ -795,16 +790,22 @@ def document_settings_catalog(
             for setting in repo_data.get("settings", []):
                 rows = extract_setting(setting.get("settingInstance", {}), settings_lookup)
                 for row in rows:
+                    setting_name = row[0]
+                    value = row[1]
+                    description = row[2]
                     setting_definition_id = setting.get("settingInstance", {}).get("settingDefinitionId", "")
                     definition = settings_lookup.get(setting_definition_id, {})
                     category_id = definition.get("categoryId", "")
                     category_name = categories_lookup.get(category_id, {}).get("displayName", "")
                     root_category_id = categories_lookup.get(category_id, {}).get("rootCategoryId", "")
                     root_category_name = categories_lookup.get(root_category_id, {}).get("displayName", "")
+
+                    if max_length and isinstance(value, str) and len(value) > max_length:
+                        value = "Value too long to display"
                     config_table_list.append({
-                        "setting_name": row[0],
-                        "formatted_value": row[1],
-                        "description": row[2],
+                        "setting_name": setting_name,
+                        "value": value,
+                        "description": description,
                         "category_name": category_name,
                         "root_category_name": root_category_name
                     })
@@ -859,7 +860,7 @@ def document_settings_catalog(
                         else:
                             table_data.append([f"**{root_cat}** > **{cat}**", "", ""])
                         for i in items:
-                            table_data.append([i["setting_name"], i["formatted_value"], i["description"]])
+                            table_data.append([i["setting_name"], i["value"], i["description"]])
                 table_md = write_table(table_data, headers=["Setting", "Value", "Description"])
                 md.write(str(table_md) + "\n")
 
