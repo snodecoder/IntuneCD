@@ -658,6 +658,7 @@ def extract_setting(setting_instance, settings_lookup):
     definition = settings_lookup.get(setting_definition_id)
     root_definition_id = definition.get("rootDefinitionId") if definition else None
     display_name = definition.get("displayName", setting_definition_id)
+    info_urls = definition.get("infoUrls", [])
 
     # Indent sub-settings
     if root_definition_id and root_definition_id != setting_definition_id:
@@ -670,6 +671,10 @@ def extract_setting(setting_instance, settings_lookup):
     description = sanitize_text(raw_description)
     description = escape_markdown(description)
     description = convert_newlines_to_br(description)
+    # Append info URLs to description
+    if info_urls:
+        links = " ".join([f'[More info {i+1}]({url})' for i, url in enumerate(info_urls)])
+        description = f"{description}<br>{links}" if description else links
     description = f"<details><summary>Click to expand...</summary>{description}</details>" if description else ""
 
     if "simpleSettingValue" in setting_instance:
