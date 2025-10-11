@@ -673,7 +673,7 @@ def extract_setting(setting_instance, settings_lookup):
     description = convert_newlines_to_br(description)
     # Append info URLs to description
     if info_urls:
-        links = " ".join([f'{url}<br>)' for url in enumerate(info_urls)])
+        links = "InfoUrls:<br>".join([f'{url}<br>)' for url in enumerate(info_urls)])
         description = f"{description}<br>{links}" if description else links
     description = f"<details><summary>Click to expand...</summary>{description}</details>" if description else ""
 
