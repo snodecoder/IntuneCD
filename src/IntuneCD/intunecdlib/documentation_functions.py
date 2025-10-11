@@ -673,8 +673,8 @@ def extract_setting(setting_instance, settings_lookup):
     description = convert_newlines_to_br(description)
     # Append info URLs to description
     if info_urls:
-        links = "<br>".join([f'{url}' for url in enumerate(info_urls)])
-        description = f"{description}<br>InfoUrls:<br>{links}" if description else f"InfoUrls:<br>{links}"
+        links = "<br>".join([f'({url})[{url}]' for url in enumerate(info_urls)])
+        description = f"{description}<br>{links}" if description else links
     description = f"<details><summary>Click to expand...</summary>{description}</details>" if description else ""
 
     if "simpleSettingValue" in setting_instance:
