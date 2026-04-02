@@ -235,8 +235,45 @@ def detect_script_language(content):
     if any(indicator in content for indicator in powershell_patterns):
         return "powershell"
 
-    # Check for common shell script patterns
-    if any(indicator in content for indicator in ["#!/bin/bash", "#!/bin/sh", "function ", "if [", "then", "fi", "elif"]):
+    # Check for Ruby indicators (without shebang) - check before Python due to "def " overlap
+    ruby_patterns = [
+        "require ", "end\n", "end ", "class ", "module ",
+        "puts ", "attr_accessor", "attr_reader", "attr_writer",
+        "do |", ".each ", ".map", ".select", ".reject",
+        "unless ", "elsif ", "@", ":::",
+    ]
+    # Count Ruby-specific patterns vs ambiguous patterns
+    ruby_count = sum(1 for pattern in ruby_patterns if pattern in content)
+    if ruby_count >= 2:  # Require at least 2 Ruby patterns to avoid false positives
+        return "ruby"
+
+    # Check for Python indicators (without shebang)
+    python_patterns = [
+        "import ", "from ", "def ", "class ", "if __name__",
+        "print(", "range(", "len(", "str(", "int(", "list(", "dict(",
+        "self.", "__init__", "__str__", "except:", "try:", "finally:",
+    ]
+    # Count Python-specific patterns
+    python_count = sum(1 for pattern in python_patterns if pattern in content)
+    if python_count >= 2:  # Require at least 2 Python patterns to avoid false positives
+        return "python"
+
+    # Check for Perl indicators (without shebang)
+    perl_patterns = [
+        "use strict;", "use warnings;", "my $", "our $",
+        "sub ", "package ", "foreach ", "elsif",
+        "chomp", "=~", "->", "::",
+    ]
+    if any(indicator in content for indicator in perl_patterns):
+        return "perl"
+
+    # Check for common shell script patterns (without shebang)
+    shell_patterns = [
+        "#!/bin/bash", "#!/bin/sh", "function ", "if [", "then\n", "fi\n",
+        "elif\n", "case ", "esac", "while [", "for ", "do\n", "done\n",
+        "echo ", "export ", "source ", "shift", "exit ",
+    ]
+    if any(indicator in content for indicator in shell_patterns):
         return "bash"
 
     # Default to plaintext

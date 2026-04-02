@@ -63,6 +63,114 @@ print("Hello World")"""
 
         self.assertEqual(detect_script_language(python_script), "python")
 
+    def test_detect_python_language_without_shebang(self):
+        """Python script without shebang should be detected correctly."""
+        python_script = """import os
+import sys
+
+def main():
+    print("Hello World")
+    for i in range(10):
+        print(i)
+
+if __name__ == "__main__":
+    main()"""
+
+        self.assertEqual(detect_script_language(python_script), "python")
+
+    def test_detect_python_language_class(self):
+        """Python script with class definition should be detected correctly."""
+        python_script = """class MyClass:
+    def __init__(self):
+        self.value = 0
+
+    def __str__(self):
+        return str(self.value)"""
+
+        self.assertEqual(detect_script_language(python_script), "python")
+
+    def test_detect_perl_language_with_shebang(self):
+        """Perl script with shebang should be detected correctly."""
+        perl_script = """#!/usr/bin/perl
+use strict;
+use warnings;
+
+my $name = "World";
+print "Hello $name\\n";"""
+
+        self.assertEqual(detect_script_language(perl_script), "perl")
+
+    def test_detect_perl_language_without_shebang(self):
+        """Perl script without shebang should be detected correctly."""
+        perl_script = """use strict;
+use warnings;
+
+my $counter = 0;
+foreach my $item (@list) {
+    print "$item\\n";
+}"""
+
+        self.assertEqual(detect_script_language(perl_script), "perl")
+
+    def test_detect_ruby_language_with_shebang(self):
+        """Ruby script with shebang should be detected correctly."""
+        ruby_script = """#!/usr/bin/env ruby
+require 'json'
+
+class Greeter
+  def initialize(name)
+    @name = name
+  end
+
+  def greet
+    puts "Hello #{@name}"
+  end
+end"""
+
+        self.assertEqual(detect_script_language(ruby_script), "ruby")
+
+    def test_detect_ruby_language_without_shebang(self):
+        """Ruby script without shebang should be detected correctly."""
+        ruby_script = """require 'fileutils'
+
+class MyClass
+  attr_accessor :name
+
+  def process
+    items.each do |item|
+      puts item
+    end
+  end
+end"""
+
+        self.assertEqual(detect_script_language(ruby_script), "ruby")
+
+    def test_detect_shell_language_with_case(self):
+        """Shell script with case statement should be detected correctly."""
+        shell_script = """case "$1" in
+  start)
+    echo "Starting service"
+    ;;
+  stop)
+    echo "Stopping service"
+    ;;
+  *)
+    echo "Usage: $0 {start|stop}"
+    exit 1
+    ;;
+esac"""
+
+        self.assertEqual(detect_script_language(shell_script), "bash")
+
+    def test_detect_shell_language_with_loop(self):
+        """Shell script with for loop should be detected correctly."""
+        shell_script = """for file in *.txt; do
+    echo "Processing $file"
+    export VAR="value"
+done"""
+
+        self.assertEqual(detect_script_language(shell_script), "bash")
+
     def test_detect_unknown_language(self):
         """Unknown script should return empty string."""
         unknown_script = """This is just plain text
