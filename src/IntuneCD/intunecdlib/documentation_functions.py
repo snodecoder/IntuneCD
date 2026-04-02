@@ -178,12 +178,15 @@ def is_base64(s):
     try:
         # Attempt to decode the string
         if isinstance(s, str):
-            decoded = base64.b64decode(s.encode())
+            # Try to decode from base64
+            decoded = base64.b64decode(s, validate=True)
+            # Re-encode and check if it matches the original (after removing padding differences)
+            re_encoded = base64.b64encode(decoded).decode('utf-8')
+            # Compare normalized versions (base64 can have different padding)
+            return s.rstrip('=') == re_encoded.rstrip('=') and len(s) > 10
         else:
-            decoded = base64.b64decode(s)
-        # If decoding succeeds and the decoded bytes match the original string, it's a valid base64-encoded string
-        return decoded == s.encode()
-    except (TypeError, binascii.Error):
+            return False
+    except Exception:
         # If decoding fails, it's not a valid base64-encoded string
         return False
 
@@ -201,10 +204,62 @@ def decode_base64(data):
         raise ValueError("Unable to decode data")
 
 
+def detect_script_language(content):
+    """
+    Detects the script language based on content.
+    :param content: The script content
+    :return: The language identifier for markdown code blocks
+    """
+    # Check for shebang at the beginning
+    if content.startswith("#!"):
+        first_line = content.split("\n")[0].lower()
+        if "bash" in first_line or "sh" in first_line:
+            return "bash"
+        elif "python" in first_line:
+            return "python"
+        elif "perl" in first_line:
+            return "perl"
+        elif "ruby" in first_line:
+            return "ruby"
+
+    # Check for PowerShell indicators (common cmdlets and patterns)
+    powershell_patterns = [
+        "param(", "Param(",
+        "$PSVersionTable",
+        "Write-Host", "Write-Output", "Write-Error", "Write-Warning", "Write-Verbose",
+        "Get-", "Set-", "New-", "Remove-", "Add-", "Clear-", "Enable-", "Disable-",
+        "Start-", "Stop-", "Restart-", "Test-", "Invoke-",
+        "-ErrorAction", "-Verbose", "-WhatIf", "-Confirm",
+        "$_", "[CmdletBinding",
+    ]
+    if any(indicator in content for indicator in powershell_patterns):
+        return "powershell"
+
+    # Check for common shell script patterns
+    if any(indicator in content for indicator in ["#!/bin/bash", "#!/bin/sh", "function ", "if [", "then", "fi", "elif"]):
+        return "bash"
+
+    # Default to plaintext
+    return ""
+
+
+def wrap_script_in_code_block(script_content):
+    """
+    Wraps script content in a markdown code block with appropriate language syntax.
+    :param script_content: The decoded script content
+    :return: The script content wrapped in a markdown code block
+    """
+    language = detect_script_language(script_content)
+    # Use HTML details/summary for collapsible code block
+    code_block = f"<details><summary>Click to expand script content</summary>\n\n```{language}\n{script_content}\n```\n\n</details>"
+    return code_block
+
+
 def clean_list(data, decode):
     """
     This function returns a list with strings to be used in a table.
     :param data: The data to be cleaned
+    :param decode: Whether to decode base64 values
     :return: The list of strings
     """
 
@@ -385,9 +440,21 @@ def document_configs(
 
             # Build config table
             config_table_list = []
-            for key, value in zip(
-                repo_data.keys(), clean_list(repo_data.values(), decode)
-            ):
+            for key, value in repo_data.items():
+                # Handle script content fields specially when decode is enabled
+                if decode and isinstance(value, str) and is_base64(value):
+                    # Check if this is a script content field
+                    if key.lower() in ["scriptcontent", "detectionscriptcontent", "remediationscriptcontent"]:
+                        decoded_val = decode_base64(value)
+                        value = wrap_script_in_code_block(decoded_val)
+                    else:
+                        # Process normally through clean_list for other fields
+                        # Pass decode=True so clean_list handles the decoding
+                        value = clean_list([value], decode)[0]
+                else:
+                    # Process normally through clean_list
+                    value = clean_list([value], decode)[0]
+
                 if cleanup and not value and not isinstance(value, bool):
                     continue
                 if key == "@odata.type":

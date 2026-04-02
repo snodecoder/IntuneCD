@@ -40,3 +40,24 @@ There are a number of ways you can get help,
 - Ask a question on [Discord](https://discord.gg/msems)
 - Ask a question on [Slack](https://join.slack.com/t/intunecd/shared_invite/zt-1nf255xvo-POv60XoewYfY65TH9~tV_g)
 - Check the [FAQ](https://github.com/almenscorner/IntuneCD/wiki/FAQ)
+
+### Script Content in Documentation
+
+When generating documentation with the `--decode` flag, IntuneCD now automatically decodes and properly formats script content fields in markdown files. This feature applies to:
+
+- PowerShell scripts (`scriptContent`)
+- Proactive Remediation detection scripts (`detectionScriptContent`)
+- Proactive Remediation remediation scripts (`remediationScriptContent`)
+
+**Key features:**
+- **Automatic language detection**: Scripts are analyzed to detect their language (PowerShell, Bash, Python, etc.)
+- **Syntax highlighting**: Scripts are wrapped in markdown code blocks with appropriate language tags
+- **Collapsible sections**: Script content is displayed in expandable `<details>` sections to keep documentation clean
+- **Markdown safety**: Special markdown characters within scripts are properly escaped by the code block syntax
+
+**Usage:**
+```bash
+IntuneCD-startdocumentation --path /path/to/backup --decode
+```
+
+Without the `--decode` flag, script content remains base64-encoded in the documentation as before.
